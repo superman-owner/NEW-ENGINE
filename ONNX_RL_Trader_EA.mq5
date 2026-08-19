@@ -1,12 +1,12 @@
 //+--------------------------------------------------------------------------------------+
 //|                                                          ONNX_RL_Trader_EA.mq5      |
-//|                                             Copyright (c) 2026, FXFORGE AI Quant     |
+//|                                             Copyright (c) 2026, AI Trading Systems   |
 //|                                                                 https://www.mql5.com |
 //+--------------------------------------------------------------------------------------+
-#property copyright   "Copyright (c) 2026, FXFORGE AI Quant"
+#property copyright   "Copyright (c) 2026, AI Trading Systems"
 #property link        "https://www.mql5.com"
-#property version     "3.00"
-#property description "Institutional PPO Actor-Critic DRL EA for Gold (12 Features)"
+#property version     "2.00"
+#property description "Active Deep Reinforcement Learning EA for Gold (XAUUSD)"
 
 #include <Trade\Trade.mqh>
 #include <Trade\PositionInfo.mqh>
@@ -35,7 +35,7 @@ input int      InpTrailingStep        = 50;     // Trailing Step (Points)
 
 input group "=== [4] System Settings ==="
 input ulong    InpMagicNumber         = 112233; // EA Magic Number
-input string   InpTradeComment        = "PPO_ONNX_GOLD_12F";
+input string   InpTradeComment        = "RL_ONNX_GOLD";
 
 //+--------------------------------------------------------------------------------------+
 //| GLOBAL VARIABLES                                                                     |
@@ -68,22 +68,22 @@ int OnInit()
       return INIT_FAILED;
    }
 
-   // 2. Set Tensor Shapes: Input [1, 12], Output [1, 3]
-   const long in_shape[]  = {1, 12};
+   // 2. Set Tensor Shapes: Input [1, 6], Output [1, 3]
+   const long in_shape[]  = {1, 6};
    const long out_shape[] = {1, 3};
 
    if(!OnnxSetInputShape(m_onnx_handle, 0, in_shape))
    {
-      Print("Error: Failed to set ONNX input shape [1, 12].");
+      Print("Error: Failed to set ONNX input shape.");
       return INIT_FAILED;
    }
    if(!OnnxSetOutputShape(m_onnx_handle, 0, out_shape))
    {
-      Print("Error: Failed to set ONNX output shape [1, 3].");
+      Print("Error: Failed to set ONNX output shape.");
       return INIT_FAILED;
    }
 
-   Print("✅ Institutional PPO DRL Model (12 Features) Loaded Successfully.");
+   Print("Active ONNX RL Agent for Gold Loaded Successfully.");
    return INIT_SUCCEEDED;
 }
 
@@ -101,126 +101,71 @@ void OnDeinit(const int reason)
 }
 
 //+--------------------------------------------------------------------------------------+
-//| ON TICK HANDLER                                                                      |
+//| ON TICK EVENT                                                                        |
 //+--------------------------------------------------------------------------------------+
 void OnTick()
 {
-   // Execute Trailing Stop on every tick
    if(InpUseTrailing)
       ManageTrailingStop();
 
-   // Only evaluate AI Inference on Bar Open (M15 Bar Transition)
-   datetime current_bar_time = (datetime)SeriesInfoInteger(_Symbol, _Period, SERIES_LASTBAR_DATE);
-   if(current_bar_time == m_last_bar_time)
+   // Run Decision Cycle on Bar Open
+   if(!IsNewBar())
       return;
 
-   m_last_bar_time = current_bar_time;
+   m_symbol.RefreshRates();
 
-   // Check Spread
-   m_symbol.Refresh();
    if(m_symbol.Spread() > InpMaxSpreadPoints)
-   {
-      PrintFormat("Warning: Current spread %d exceeds maximum allowed %d. Skipping bar.", m_symbol.Spread(), InpMaxSpreadPoints);
       return;
-   }
 
-   // 1. Copy Historical Bars for 12 Feature Extraction
+   // 1. Copy 25 Historical Bars for Feature Extraction
    MqlRates rates[];
    ArraySetAsSeries(rates, true);
-   if(CopyRates(_Symbol, _Period, 0, 60, rates) < 60)
+   if(CopyRates(_Symbol, _Period, 0, 25, rates) < 25)
       return;
 
-   // 2. Extract 12 Institutional Quant Features
-   double p0  = rates[0].close;
-   double p1  = rates[1].close;
-   double p3  = rates[3].close;
-   double p8  = rates[8].close;
-   double p21 = rates[21].close;
+   // 2. Extract 6 Scaled Features Matching Python RL Environment (Scaled by 100)
+   double p0 = rates[0].close;
+   double p5 = rates[5].close;
+   double p10= rates[10].close;
+   double p20= rates[20].close;
 
-   // [0..3] Multi-Horizon Log Returns
-   float ret1  = (float)(MathLog(p0 / p1) * 100.0);
-   float ret3  = (float)(MathLog(p0 / p3) * 100.0);
-   float ret8  = (float)(MathLog(p0 / p8) * 100.0);
-   float ret21 = (float)(MathLog(p0 / p21) * 100.0);
+   float ret5  = (float)(((p0 - p5) / p5) * 100.0);
+   float ret10 = (float)(((p0 - p10) / p10) * 100.0);
+   float ret20 = (float)(((p0 - p20) / p20) * 100.0);
 
-   // [4] RSI-14 Normalized to [-1.0, +1.0]
-   double sumGain = 0.0, sumLoss = 0.0;
-   for(int i = 0; i < 14; i++)
-   {
-      double diff = rates[i].close - rates[i+1].close;
-      if(diff > 0) sumGain += diff;
-      else         sumLoss += -diff;
-   }
-   double rs = (sumLoss > 0) ? (sumGain / sumLoss) : 1.0;
-   double rsi = 100.0 - (100.0 / (1.0 + rs));
-   float rsi_norm = (float)((rsi - 50.0) / 50.0);
+   // Volatility (10-bar StdDev / Price * 100)
+   double sum = 0.0;
+   for(int i = 0; i <= 10; i++) sum += rates[i].close;
+   double mean = sum / 11.0;
+   double var = 0.0;
+   for(int i = 0; i <= 10; i++) var += MathPow(rates[i].close - mean, 2.0);
+   float volatility = (float)((MathSqrt(var / 11.0) / p0) * 100.0);
 
-   // [5] Realized Volatility / ATR
-   double sumVol = 0.0;
-   for(int i = 0; i < 14; i++) sumVol += rates[i].close;
-   double meanVol = sumVol / 14.0;
-   double varVol = 0.0;
-   for(int i = 0; i < 14; i++) varVol += MathPow(rates[i].close - meanVol, 2.0);
-   float vol_atr = (float)((MathSqrt(varVol / 14.0) / p0) * 100.0);
+   // SMA 20 Distance (* 100)
+   double sum20 = 0.0;
+   for(int i = 0; i <= 20; i++) sum20 += rates[i].close;
+   double sma20 = sum20 / 21.0;
+   float dist_sma = (float)(((p0 - sma20) / p0) * 100.0);
 
-   // [6] Distance to EMA-50
-   double sumEMA = 0.0;
-   for(int i = 0; i < 50; i++) sumEMA += rates[i].close;
-   double ema50 = sumEMA / 50.0;
-   float dist_sma = (float)(((p0 - ema50) / p0) * 100.0);
-
-   // [7] Bollinger %B
-   double sumBB = 0.0;
-   for(int i = 0; i < 20; i++) sumBB += rates[i].close;
-   double meanBB = sumBB / 20.0;
-   double varBB = 0.0;
-   for(int i = 0; i < 20; i++) varBB += MathPow(rates[i].close - meanBB, 2.0);
-   double stdBB = MathSqrt(varBB / 20.0) + 1e-7;
-   double upperBB = meanBB + 2.0 * stdBB;
-   double lowerBB = meanBB - 2.0 * stdBB;
-   float bollinger_pct_b = (float)((p0 - lowerBB) / (upperBB - lowerBB + 1e-7) - 0.5);
-
-   // [8..9] Cyclic Time Embedding
-   MqlDateTime dt;
-   TimeToStruct(rates[0].time, dt);
-   int bar_of_day = (dt.hour * 60 + dt.min) / 15;
-   float session_sin = (float)MathSin(2.0 * M_PI * bar_of_day / 96.0);
-   float session_cos = (float)MathCos(2.0 * M_PI * bar_of_day / 96.0);
-
-   // [10..11] Position State & Unrealized PnL %
+   // Current Position Status (-1 = Short, 0 = Flat, 1 = Long)
    float current_pos = 0.0f;
-   float unrealized_pnl = 0.0f;
    for(int i = PositionsTotal() - 1; i >= 0; i--)
    {
       if(m_position.SelectByIndex(i) && m_position.Magic() == InpMagicNumber && m_position.Symbol() == _Symbol)
       {
          current_pos = (m_position.PositionType() == POSITION_TYPE_BUY) ? 1.0f : -1.0f;
-         double open_price = m_position.PriceOpen();
-         if(open_price > 0)
-         {
-            if(current_pos == 1.0f)
-               unrealized_pnl = (float)(((p0 - open_price) / open_price) * 100.0);
-            else
-               unrealized_pnl = (float)(((open_price - p0) / open_price) * 100.0);
-         }
          break;
       }
    }
 
-   // 3. Prepare 12-Dimensional Input Tensor
-   matrixf input_tensor(1, 12);
-   input_tensor[0][0] = ret1;
-   input_tensor[0][1] = ret3;
-   input_tensor[0][2] = ret8;
-   input_tensor[0][3] = ret21;
-   input_tensor[0][4] = rsi_norm;
-   input_tensor[0][5] = vol_atr;
-   input_tensor[0][6] = dist_sma;
-   input_tensor[0][7] = bollinger_pct_b;
-   input_tensor[0][8] = session_sin;
-   input_tensor[0][9] = session_cos;
-   input_tensor[0][10]= current_pos;
-   input_tensor[0][11]= unrealized_pnl;
+   // 3. Prepare Input Tensor
+   matrixf input_tensor(1, 6);
+   input_tensor[0][0] = ret5;
+   input_tensor[0][1] = ret10;
+   input_tensor[0][2] = ret20;
+   input_tensor[0][3] = volatility;
+   input_tensor[0][4] = dist_sma;
+   input_tensor[0][5] = current_pos;
 
    vectorf output_tensor(3); // [P(Hold), P(Buy), P(Sell)]
 
@@ -235,7 +180,7 @@ void OnTick()
    float pBuy  = output_tensor[1];
    float pSell = output_tensor[2];
 
-   // 5. Select Action
+   // 5. Select Action with Highest Probability Passing Threshold
    int action = 0; // 0 = Hold, 1 = Buy, 2 = Sell
    if(pBuy > InpConfidenceThreshold && pBuy > pSell && pBuy > pHold)
       action = 1;
@@ -246,8 +191,8 @@ void OnTick()
 
    // 6. Realtime Dashboard
    string actionStr = "● HOLD / FLAT";
-   if(action == 1) actionStr = "▲ BUY SIGNAL (PPO BULLISH)";
-   if(action == 2) actionStr = "▼ SELL SIGNAL (PPO BEARISH)";
+   if(action == 1) actionStr = "▲ BUY SIGNAL (BULLISH)";
+   if(action == 2) actionStr = "▼ SELL SIGNAL (BEARISH)";
 
    double openPL = 0.0;
    int openTrades = 0;
@@ -262,9 +207,8 @@ void OnTick()
 
    Comment(StringFormat(
       "============================================\n" +
-      "   INSTITUTIONAL PPO GOLD (XAUUSD) AI EA   \n" +
+      "      ACTIVE ONNX GOLD (XAUUSD) AI EA       \n" +
       "============================================\n" +
-      "Model Inputs     : 12 Quant Multi-Regime Vector\n" +
       "AI Probabilities : Hold: %.1f%% | Buy: %.1f%% | Sell: %.1f%%\n" +
       "AI Decision      : %s\n" +
       "Active Trades    : %d | Floating P/L: $%.2f\n" +
@@ -305,56 +249,64 @@ void ExecuteTrade(int action)
    if(action == 1 && !hasBuy)
    {
       double ask = m_symbol.Ask();
-      double sl = (InpStopLossPoints > 0)   ? (ask - InpStopLossPoints * point)   : 0;
-      double tp = (InpTakeProfitPoints > 0) ? (ask + InpTakeProfitPoints * point) : 0;
+      double sl  = (InpStopLossPoints > 0)   ? (ask - InpStopLossPoints * point) : 0.0;
+      double tp  = (InpTakeProfitPoints > 0) ? (ask + InpTakeProfitPoints * point) : 0.0;
       m_trade.Buy(InpFixedLot, _Symbol, ask, sl, tp, InpTradeComment);
    }
    else if(action == 2 && !hasSell)
    {
       double bid = m_symbol.Bid();
-      double sl = (InpStopLossPoints > 0)   ? (bid + InpStopLossPoints * point)   : 0;
-      double tp = (InpTakeProfitPoints > 0) ? (bid - InpTakeProfitPoints * point) : 0;
+      double sl  = (InpStopLossPoints > 0)   ? (bid + InpStopLossPoints * point) : 0.0;
+      double tp  = (InpTakeProfitPoints > 0) ? (bid - InpTakeProfitPoints * point) : 0.0;
       m_trade.Sell(InpFixedLot, _Symbol, bid, sl, tp, InpTradeComment);
    }
 }
 
 //+--------------------------------------------------------------------------------------+
-//| TRAILING STOP MANAGEMENT                                                             |
+//| TRAILING STOP                                                                        |
 //+--------------------------------------------------------------------------------------+
 void ManageTrailingStop()
 {
-   double point = m_symbol.Point();
-   double start = InpTrailingStart * point;
-   double step  = InpTrailingStep  * point;
-
    for(int i = PositionsTotal() - 1; i >= 0; i--)
    {
       if(m_position.SelectByIndex(i) && m_position.Magic() == InpMagicNumber && m_position.Symbol() == _Symbol)
       {
-         ulong ticket = m_position.Ticket();
-         double openPrice = m_position.PriceOpen();
-         double currentSL = m_position.StopLoss();
+         m_symbol.RefreshRates();
+         double point = m_symbol.Point();
 
          if(m_position.PositionType() == POSITION_TYPE_BUY)
          {
             double bid = m_symbol.Bid();
-            if((bid - openPrice) >= start)
+            double profitPts = (bid - m_position.PriceOpen()) / point;
+            if(profitPts >= InpTrailingStart)
             {
-               double newSL = bid - start;
-               if(newSL > currentSL + step || currentSL == 0)
-                  m_trade.PositionModify(ticket, newSL, m_position.TakeProfit());
+               double newSL = NormalizeDouble(bid - InpTrailingStart * point, m_symbol.Digits());
+               if(newSL > m_position.StopLoss() + InpTrailingStep * point || m_position.StopLoss() == 0.0)
+                  m_trade.PositionModify(m_position.Ticket(), newSL, m_position.TakeProfit());
             }
          }
          else if(m_position.PositionType() == POSITION_TYPE_SELL)
          {
             double ask = m_symbol.Ask();
-            if((openPrice - ask) >= start)
+            double profitPts = (m_position.PriceOpen() - ask) / point;
+            if(profitPts >= InpTrailingStart)
             {
-               double newSL = ask + start;
-               if(newSL < currentSL - step || currentSL == 0)
-                  m_trade.PositionModify(ticket, newSL, m_position.TakeProfit());
+               double newSL = NormalizeDouble(ask + InpTrailingStart * point, m_symbol.Digits());
+               if(newSL < m_position.StopLoss() - InpTrailingStep * point || m_position.StopLoss() == 0.0)
+                  m_trade.PositionModify(m_position.Ticket(), newSL, m_position.TakeProfit());
             }
          }
       }
    }
+}
+
+bool IsNewBar()
+{
+   datetime currentBarTime = iTime(_Symbol, _Period, 0);
+   if(currentBarTime != m_last_bar_time)
+   {
+      m_last_bar_time = currentBarTime;
+      return true;
+   }
+   return false;
 }

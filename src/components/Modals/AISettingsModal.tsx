@@ -1,0 +1,1011 @@
+import React, { useState, useEffect } from 'react';
+import * as LucideIcons from 'lucide-react';
+import { useTheme } from '../../context/ThemeContext';
+import {
+  getAISettings,
+  saveAISettings,
+  testAIConnection,
+  DEFAULT_AI_SETTINGS,
+  PROVIDER_PRESETS,
+  type AIApiSettings,
+  type AIProvider,
+} from '../../services/aiApiService';
+
+interface AISettingsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSaved?: () => void;
+}
+
+type AITab = 'provider' | 'credentials' | 'parameters' | 'prompt' | 'diagnostics';
+
+//  Official Brand Vector Logos with 100% Authentic Brand Vectors
+const OpenAILogo: React.FC<{ size?: number; isSelected?: boolean; isLight?: boolean }> = ({
+  size = 24,
+  isSelected,
+  isLight,
+}) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <path
+      d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1239 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.6667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"
+      fill={isSelected ? '#10a37f' : isLight ? '#111827' : '#ffffff'}
+    />
+  </svg>
+);
+
+const ClaudeLogo: React.FC<{ size?: number }> = ({ size = 24 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <path
+      d="M4.709 15.955l4.72-2.647.08-.23-.08-.128H9.2l-.79-.048-2.698-.073-2.339-.097-2.266-.122-.571-.121L0 11.784l.055-.352.48-.321.686.06 1.52.103 2.278.158 1.652.097 2.449.255h.389l.055-.157-.134-.098-.103-.097-2.358-1.596-2.552-1.688-1.336-.972-.724-.491-.364-.462-.158-1.008.656-.722.881.06.225.061.893.686 1.908 1.476 2.491 1.833.365.304.145-.103.019-.073-.164-.274-1.355-2.446-1.446-2.49-.644-1.032-.17-.619a2.97 2.97 0 01-.104-.729L6.283.134 6.696 0l.996.134.42.364.62 1.414 1.002 2.229 1.555 3.03.456.898.243.832.091.255h.158V9.01l.128-1.706.237-2.095.23-2.695.08-.76.376-.91.747-.492.584.28.48.685-.067.444-.286 1.851-.559 2.903-.364 1.942h.212l.243-.242.985-1.306 1.652-2.064.73-.82.85-.904.547-.431h1.033l.76 1.129-.34 1.166-1.064 1.347-.881 1.142-1.264 1.7-.79 1.36.073.11.188-.02 2.856-.606 1.543-.28 1.841-.315.833.388.091.395-.328.807-1.969.486-2.309.462-3.439.813-.042.03.049.061 1.549.146.662.036h1.622l3.02.225.79.522.474.638-.079.485-1.215.62-1.64-.389-3.829-.91-1.312-.329h-.182v.11l1.093 1.068 2.006 1.81 2.509 2.33.127.578-.322.455-.34-.049-2.205-1.657-.851-.747-1.926-1.62h-.128v.17l.444.649 2.345 3.521.122 1.08-.17.353-.608.213-.668-.122-1.374-1.925-1.415-2.167-1.143-1.943-.14.08-.674 7.254-.316.37-.729.28-.607-.461-.322-.747.322-1.476.389-1.924.315-1.53.286-1.9.17-.632-.012-.042-.14.018-1.434 1.967-2.18 2.945-1.726 1.845-.414.164-.717-.37.067-.662.401-.589 2.388-3.036 1.44-1.882.93-1.086-.006-.158h-.055L4.132 18.56l-1.13.146-.487-.456.061-.746.231-.243 1.908-1.312-.006.006z"
+      fill="#D97757"
+    />
+  </svg>
+);
+
+const GeminiLogo: React.FC<{ size?: number }> = ({ size = 24 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <path
+      d="M12 2C12 7.52 7.52 12 2 12C7.52 12 12 16.48 12 22C12 16.48 16.48 12 22 12C16.48 12 12 7.52 12 2Z"
+      fill="url(#gemini-real-brand-grad)"
+    />
+    <defs>
+      <linearGradient id="gemini-real-brand-grad" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#1ba0e2" />
+        <stop offset="0.32" stopColor="#4285f4" />
+        <stop offset="0.68" stopColor="#9b72cb" />
+        <stop offset="1" stopColor="#d96570" />
+      </linearGradient>
+    </defs>
+  </svg>
+);
+
+const DeepSeekLogo: React.FC<{ size?: number }> = ({ size = 24 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <path
+      d="M23.748 4.482c-.254-.124-.364.113-.512.234-.051.039-.094.09-.137.136-.372.397-.806.657-1.373.626-.829-.046-1.537.214-2.163.848-.133-.782-.575-1.248-1.247-1.548-.352-.156-.708-.311-.955-.65-.172-.241-.219-.51-.305-.774-.055-.16-.11-.323-.293-.35-.2-.031-.278.136-.356.276-.313.572-.434 1.202-.422 1.84.027 1.436.633 2.58 1.838 3.393.137.093.172.187.129.323-.082.28-.18.552-.266.833-.055.179-.137.217-.329.14a5.526 5.526 0 01-1.736-1.18c-.857-.828-1.631-1.742-2.597-2.458a11.365 11.365 0 00-.689-.471c-.985-.957.13-1.743.388-1.836.27-.098.093-.432-.779-.428-.872.004-1.67.295-2.687.684a3.055 3.055 0 01-.465.137 9.597 9.597 0 00-2.883-.102c-1.885.21-3.39 1.102-4.497 2.623C.082 8.606-.231 10.684.152 12.85c.403 2.284 1.569 4.175 3.36 5.653 1.858 1.533 3.997 2.284 6.438 2.14 1.482-.085 3.133-.284 4.994-1.86.47.234.962.327 1.78.397.63.059 1.236-.03 1.705-.128.735-.156.684-.837.419-.961-2.155-1.004-1.682-.595-2.113-.926 1.096-1.296 2.746-2.642 3.392-7.003.05-.347.007-.565 0-.845-.004-.17.035-.237.23-.256a4.173 4.173 0 001.545-.475c1.396-.763 1.96-2.015 2.093-3.517.02-.23-.004-.467-.247-.588zM11.581 18c-2.089-1.642-3.102-2.183-3.52-2.16-.392.024-.321.471-.235.763.09.288.207.486.371.739.114.167.192.416-.113.603-.673.416-1.842-.14-1.897-.167-1.361-.802-2.5-1.86-3.301-3.307-.774-1.393-1.224-2.887-1.298-4.482-.02-.386.093-.522.477-.592a4.696 4.696 0 011.529-.039c2.132.312 3.946 1.265 5.468 2.774.868.86 1.525 1.887 2.202 2.891.72 1.066 1.494 2.082 2.48 2.914.348.292.625.514.891.677-.802.09-2.14.11-3.054-.614zm1-6.44a.306.306 0 01.415-.287.302.302 0 01.2.288.306.306 0 01-.31.307.303.303 0 01-.304-.308zm3.11 1.596c-.2.081-.399.151-.59.16a1.245 1.245 0 01-.798-.254c-.274-.23-.47-.358-.552-.758a1.73 1.73 0 01.016-.588c.07-.327-.008-.537-.239-.727-.187-.156-.426-.199-.688-.199a.559.559 0 01-.254-.078c-.11-.054-.2-.19-.114-.358.028-.054.16-.186.192-.21.356-.202.767-.136 1.146.016.352.144.618.408 1.001.782.391.451.462.576.685.914.176.265.336.537.445.848.067.195-.019.354-.25.452z"
+      fill="#4D6BFE"
+    />
+  </svg>
+);
+
+const MetaLogo: React.FC<{ size?: number }> = ({ size = 24 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <path
+      d="M6.897 4c1.915 0 3.516.932 5.43 3.376l.282-.373c.19-.246.383-.484.58-.71l.313-.35C14.588 4.788 15.792 4 17.225 4c1.273 0 2.469.557 3.491 1.516l.218.213c1.73 1.765 2.917 4.71 3.053 8.026l.011.392.002.25c0 1.501-.28 2.759-.818 3.7l-.14.23-.108.153c-.301.42-.664.758-1.086 1.009l-.265.142-.087.04a3.493 3.493 0 01-.302.118 4.117 4.117 0 01-1.33.208c-.524 0-.996-.067-1.438-.215-.614-.204-1.163-.56-1.726-1.116l-.227-.235c-.753-.812-1.534-1.976-2.493-3.586l-1.43-2.41-.544-.895-1.766 3.13-.343.592C7.597 19.156 6.227 20 4.356 20c-1.21 0-2.205-.42-2.936-1.182l-.168-.184c-.484-.573-.837-1.311-1.043-2.189l-.067-.32a8.69 8.69 0 01-.136-1.288L0 14.468c.002-.745.06-1.49.174-2.23l.1-.573c.298-1.53.828-2.958 1.536-4.157l.209-.34c1.177-1.83 2.789-3.053 4.615-3.16L6.897 4zm-.033 2.615l-.201.01c-.83.083-1.606.673-2.252 1.577l-.138.199-.01.018c-.67 1.017-1.185 2.378-1.456 3.845l-.004.022a12.591 12.591 0 00-.207 2.254l.002.188c.004.18.017.36.04.54l.043.291c.092.503.257.908.486 1.208l.117.137c.303.323.698.492 1.17.492 1.1 0 1.796-.676 3.696-3.641l2.175-3.4.454-.701-.139-.198C9.11 7.3 8.084 6.616 6.864 6.616zm10.196-.552l-.176.007c-.635.048-1.223.359-1.82.933l-.196.198c-.439.462-.887 1.064-1.367 1.807l.266.398c.18.274.362.56.55.858l.293.475 1.396 2.335.695 1.114c.583.926 1.03 1.6 1.408 2.082l.213.262c.282.326.529.54.777.673l.102.05c.227.1.457.138.718.138.176.002.35-.023.518-.073.338-.104.61-.32.813-.637l.095-.163.077-.162c.194-.459.29-1.06.29-1.785l-.006-.449c-.08-2.871-.938-5.372-2.2-6.798l-.176-.189c-.67-.683-1.444-1.074-2.27-1.074z"
+      fill="url(#meta-grad-complete)"
+    />
+    <defs>
+      <linearGradient id="meta-grad-complete" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#0082FB" />
+        <stop offset="50%" stopColor="#0072EC" />
+        <stop offset="100%" stopColor="#0064E0" />
+      </linearGradient>
+    </defs>
+  </svg>
+);
+
+const QwenLogo: React.FC<{ size?: number }> = ({ size = 24 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <path
+      d="M12.604 1.34c.393.69.784 1.382 1.174 2.075a.18.18 0 00.157.091h5.552c.174 0 .322.11.446.327l1.454 2.57c.19.337.24.478.024.837-.26.43-.513.864-.76 1.3l-.367.658c-.106.196-.223.28-.04.512l2.652 4.637c.172.301.111.494-.043.77-.437.785-.882 1.564-1.335 2.34-.159.272-.352.375-.68.37-.777-.016-1.552-.01-2.327.016a.099.099 0 00-.081.05 575.097 575.097 0 01-2.705 4.74c-.169.293-.38.363-.725.364-.997.003-2.002.004-3.017.002a.537.537 0 01-.465-.271l-1.335-2.323a.09.09 0 00-.083-.049H4.982c-.285.03-.553-.001-.805-.092l-1.603-2.77a.543.543 0 01-.002-.54l1.207-2.12a.198.198 0 000-.197 550.951 550.951 0 01-1.875-3.272l-.79-1.395c-.16-.31-.173-.496.095-.965.465-.813.927-1.625 1.387-2.436.132-.234.304-.334.584-.335a338.3 338.3 0 012.589-.001.124.124 0 00.107-.063l2.806-4.895a.488.488 0 01.422-.246c.524-.001 1.053 0 1.583-.006L11.704 1c.341-.003.724.032.9.34zm-3.432.403a.06.06 0 00-.052.03L6.254 6.788a.157.157 0 01-.135.078H3.253c-.056 0-.07.025-.041.074l5.81 10.156c.025.042.013.062-.034.063l-2.795.015a.218.218 0 00-.2.116l-1.32 2.31c-.044.078-.021.118.068.118l5.716.008c.046 0 .08.02.104.061l1.403 2.454c.046.081.092.082.139 0l5.006-8.76.783-1.382a.055.055 0 01.096 0l1.424 2.53a.122.122 0 00.107.062l2.763-.02a.04.04 0 00.035-.02.041.041 0 000-.04l-2.9-5.086a.108.108 0 010-.113l.293-.507 1.12-1.977c.024-.041.012-.062-.035-.062H9.2c-.059 0-.073-.026-.043-.077l1.434-2.505a.107.107 0 000-.114L9.225 1.774a.06.06 0 00-.053-.031zm6.29 8.02c.046 0 .058.02.034.06l-.832 1.465-2.613 4.585a.056.056 0 01-.05.029.058.058 0 01-.05-.029L8.498 9.841c-.02-.34-.01-.052.028-.054l.216-.012 6.722-.012z"
+      fill="url(#qwen-grad-brand)"
+    />
+    <defs>
+      <linearGradient id="qwen-grad-brand" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#6336E7" />
+        <stop offset="100%" stopColor="#6F69F7" />
+      </linearGradient>
+    </defs>
+  </svg>
+);
+
+const MistralLogo: React.FC<{ size?: number }> = ({ size = 24 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <path d="M3.428 3.4h3.429v3.428H3.428V3.4zm13.714 0h3.43v3.428h-3.43V3.4z" fill="#FFD700" />
+    <path d="M3.428 6.828h6.857v3.429H3.429V6.828zm10.286 0h6.857v3.429h-6.857V6.828z" fill="#FFAF00" />
+    <path d="M3.428 10.258h17.144v3.428H3.428v-3.428z" fill="#FF8205" />
+    <path d="M3.428 13.686h3.429v3.428H3.428v-3.428zm6.858 0h3.429v3.428h-3.429v-3.428zm6.856 0h3.43v3.428h-3.43v-3.428z" fill="#FA500F" />
+    <path d="M0 17.114h10.286v3.429H0v-3.429zm13.714 0H24v3.429H13.714v-3.429z" fill="#E10500" />
+  </svg>
+);
+
+const GrokLogo: React.FC<{ size?: number; isSelected?: boolean; isLight?: boolean }> = ({
+  size = 24,
+  isSelected,
+  isLight,
+}) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <path
+      d="M9.27 15.29l7.978-5.897c.391-.29.95-.177 1.137.272.98 2.369.542 5.215-1.41 7.169-1.951 1.954-4.667 2.382-7.149 1.406l-2.711 1.257c3.889 2.661 8.611 2.003 11.562-.953 2.341-2.344 3.066-5.539 2.388-8.42l.006.007c-.983-4.232.242-5.924 2.75-9.383.06-.082.12-.164.179-.248l-3.301 3.305v-.01L9.267 15.292M7.623 16.723c-2.792-2.67-2.31-6.801.071-9.184 1.761-1.763 4.647-2.483 7.166-1.425l2.705-1.25a7.808 7.808 0 00-1.829-1A8.975 8.975 0 005.984 5.83c-2.533 2.536-3.33 6.436-1.962 9.764 1.022 2.487-.653 4.246-2.34 6.022-.599.63-1.199 1.259-1.682 1.925l7.62-6.815"
+      fill={isSelected ? '#00f0ff' : isLight ? '#111827' : '#ffffff'}
+    />
+  </svg>
+);
+
+const KimiLogo: React.FC<{ size?: number; isSelected?: boolean; isLight?: boolean }> = ({
+  size = 24,
+  isSelected,
+  isLight,
+}) => {
+  const fillColor = isSelected ? '#38bdf8' : isLight ? '#111827' : '#ffffff';
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path
+        d="M21.846 0a1.923 1.923 0 110 3.846H20.15a.226.226 0 01-.227-.226V1.923C19.923.861 20.784 0 21.846 0z"
+        fill={fillColor}
+      />
+      <path
+        d="M11.065 11.199l7.257-7.2c.137-.136.06-.41-.116-.41H14.3a.164.164 0 00-.117.051l-7.82 7.756c-.122.12-.302.013-.302-.179V3.82c0-.127-.083-.23-.185-.23H3.186c-.103 0-.186.103-.186.23V19.77c0 .128.083.23.186.23h2.69c.103 0 .186-.102.186-.23v-3.25c0-.069.025-.135.069-.178l2.424-2.406a.158.158 0 01.205-.023l6.484 4.772a7.677 7.677 0 003.453 1.283c.108.012.2-.095.2-.23v-3.06c0-.117-.07-.212-.164-.227a5.028 5.028 0 01-2.027-.807l-5.613-4.064c-.117-.078-.132-.279-.028-.381z"
+        fill={fillColor}
+      />
+    </svg>
+  );
+};
+
+const ZhipuLogo: React.FC<{ size?: number }> = ({ size = 24 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <path
+      d="M11.991 23.503a.24.24 0 00-.244.248.24.24 0 00.244.249.24.24 0 00.245-.249.24.24 0 00-.22-.247l-.025-.001zM9.671 5.365a1.697 1.697 0 011.099 2.132l-.071.172-.016.04-.018.054c-.07.16-.104.32-.104.498-.035.71.47 1.279 1.186 1.314h.366c1.309.053 2.338 1.173 2.286 2.523-.052 1.332-1.152 2.38-2.478 2.327h-.174c-.715.018-1.274.64-1.239 1.368 0 .124.018.23.053.337.209.373.54.658.96.8.75.23 1.517-.125 1.9-.782l.018-.035c.402-.64 1.17-.96 1.92-.711.854.284 1.378 1.226 1.099 2.167a1.661 1.661 0 01-2.077 1.102 1.711 1.711 0 01-.907-.711l-.017-.035c-.2-.323-.463-.58-.851-.711l-.056-.018a1.646 1.646 0 00-1.954.746 1.66 1.66 0 01-1.065.764 1.677 1.677 0 01-1.989-1.279c-.209-.906.332-1.83 1.257-2.043a1.51 1.51 0 01.296-.035h.018c.68-.071 1.151-.622 1.116-1.333a1.307 1.307 0 00-.227-.693 2.515 2.515 0 01-.366-1.403 2.39 2.39 0 01.366-1.208c.14-.195.21-.444.227-.693.018-.71-.506-1.261-1.186-1.332l-.07-.018a1.43 1.43 0 01-.299-.07l-.05-.019a1.7 1.7 0 01-1.047-2.114 1.68 1.68 0 012.094-1.101zm-5.575 10.11c.26-.264.639-.367.994-.27.355.096.633.379.728.74.095.362-.007.748-.267 1.013-.402.41-1.053.41-1.455 0a1.062 1.062 0 010-1.482zm14.845-.294c.359-.09.738.024.992.297.254.274.344.665.237 1.025-.107.36-.396.634-.756.718-.551.128-1.1-.22-1.23-.781a1.05 1.05 0 01.757-1.26zm-.064-4.39c.314.32.49.753.49 1.206 0 .452-.176.886-.49 1.206-.315.32-.74.5-1.185.5-.444 0-.87-.18-1.184-.5a1.727 1.727 0 010-2.412 1.654 1.654 0 012.369 0zm-11.243.163c.364.484.447 1.128.218 1.691a1.665 1.665 0 01-2.188.923c-.855-.36-1.26-1.358-.907-2.228a1.68 1.68 0 011.33-1.038c.593-.08 1.183.169 1.547.652zm11.545-4.221c.368 0 .708.2.892.524.184.324.184.724 0 1.048a1.026 1.026 0 01-.892.524c-.568 0-1.03-.47-1.03-1.048 0-.579.462-1.048 1.03-1.048zm-14.358 0c.368 0 .707.2.891.524.184.324.184.724 0 1.048a1.026 1.026 0 01-.891.524c-.569 0-1.03-.47-1.03-1.048 0-.579.461-1.048 1.03-1.048zm10.031-1.475c.925 0 1.675.764 1.675 1.706s-.75 1.705-1.675 1.705-1.674-.763-1.674-1.705c0-.942.75-1.706 1.674-1.706zm-2.626-.684c.362-.082.653-.356.761-.718a1.062 1.062 0 00-.238-1.028 1.017 1.017 0 00-.996-.294c-.547.14-.881.7-.752 1.257.13.558.675.907 1.225.783zm0 16.876c.359-.087.644-.36.75-.72a1.062 1.062 0 00-.237-1.019 1.018 1.018 0 00-.985-.301 1.037 1.037 0 00-.762.717c-.108.361-.017.754.239 1.028.245.263.606.377.953.305l.043-.01zM17.19 3.5a.631.631 0 00.628-.64c0-.355-.279-.64-.628-.64a.631.631 0 00-.628.64c0 .355.28.64.628.64zm-10.38 0a.631.631 0 00.628-.64c0-.355-.28-.64-.628-.64a.631.631 0 00-.628.64c0 .355.279.64.628.64zm-5.182 7.852a.631.631 0 00-.628.64c0 .354.28.639.628.639a.63.63 0 00.627-.606l.001-.034a.62.62 0 00-.628-.64zm5.182 9.13a.631.631 0 00-.628.64c0 .355.279.64.628.64a.631.631 0 00.628-.64c0-.355-.28-.64-.628-.64zm10.38.018a.631.631 0 00-.628.64c0 .355.28.64.628.64a.631.631 0 00.628-.64c0-.355-.279-.64-.628-.64zm5.182-9.148a.631.631 0 00-.628.64c0 .354.279.639.628.639a.631.631 0 00.628-.64c0-.355-.28-.64-.628-.64zm-.384-4.992a.24.24 0 00.244-.249.24.24 0 00-.244-.249.24.24 0 00-.244.249c0 .142.122.249.244.249zM11.991.497a.24.24 0 00.245-.248A.24.24 0 0011.99 0a.24.24 0 00-.244.249c0 .133.108.236.223.247l.021.001zM2.011 6.36a.24.24 0 00.245-.249.24.24 0 00-.244-.249.24.24 0 00-.244.249.24.24 0 00.244.249zm0 11.263a.24.24 0 00-.243.248.24.24 0 00.244.249.24.24 0 00.244-.249.252.252 0 00-.244-.248zm19.995-.018a.24.24 0 00-.245.248.24.24 0 00.245.25.24.24 0 00.244-.25.252.252 0 00-.244-.248z"
+      fill="#3859FF"
+    />
+  </svg>
+);
+
+const OpenRouterLogo: React.FC<{ size?: number }> = ({ size = 24 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <path
+      d="M18.654 3.87a5.087 5.087 0 110 10.174L23.7 19.09c.64.641.187 1.737-.72 1.737H8.48a8.479 8.479 0 010-16.958h10.175zM8.479 7.26a5.087 5.087 0 100 10.176 5.087 5.087 0 000-10.175z"
+      fill="#6466E9"
+    />
+  </svg>
+);
+
+const OllamaLogo: React.FC<{ size?: number; isSelected?: boolean; isLight?: boolean }> = ({
+  size = 24,
+  isSelected,
+  isLight,
+}) => {
+  const fillColor = isSelected ? '#38bdf8' : isLight ? '#111827' : '#ffffff';
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path
+        d="M7.905 1.09c.216.085.411.225.588.41.295.306.544.744.734 1.263.191.522.315 1.1.362 1.68a5.054 5.054 0 012.049-.636l.051-.004c.87-.07 1.73.087 2.48.474.101.053.2.11.297.17.05-.569.172-1.134.36-1.644.19-.52.439-.957.733-1.264a1.67 1.67 0 01.589-.41c.257-.1.53-.118.796-.042.401.114.745.368 1.016.737.248.337.434.769.561 1.287.23.934.27 2.163.115 3.645l.053.04.026.019c.757.576 1.284 1.397 1.563 2.35.435 1.487.216 3.155-.534 4.088l-.018.021.002.003c.417.762.67 1.567.724 2.4l.002.03c.064 1.065-.2 2.137-.814 3.19l-.007.01.01.024c.472 1.157.62 2.322.438 3.486l-.006.039a.651.651 0 01-.747.536.648.648 0 01-.54-.742c.167-1.033.01-2.069-.48-3.123a.643.643 0 01.04-.617l.004-.006c.604-.924.854-1.83.8-2.72-.046-.779-.325-1.544-.8-2.273a.644.644 0 01.18-.886l.009-.006c.243-.159.467-.565.58-1.12a4.229 4.229 0 00-.095-1.974c-.205-.7-.58-1.284-1.105-1.683-.595-.454-1.383-.673-2.38-.61a.653.653 0 01-.632-.371c-.314-.665-.772-1.141-1.343-1.436a3.288 3.288 0 00-1.772-.332c-1.245.099-2.343.801-2.67 1.686a.652.652 0 01-.61.425c-1.067.002-1.893.252-2.497.703-.522.39-.878.935-1.066 1.588a4.07 4.07 0 00-.068 1.886c.112.558.331 1.02.582 1.269l.008.007c.212.207.257.53.109.785-.36.622-.629 1.549-.673 2.44-.05 1.018.186 1.902.719 2.536l.016.019a.643.643 0 01.095.69c-.576 1.236-.753 2.252-.562 3.052a.652.652 0 01-1.269.298c-.243-1.018-.078-2.184.473-3.498l.014-.035-.008-.012a4.339 4.339 0 01-.598-1.309l-.005-.019a5.764 5.764 0 01-.177-1.785c.044-.91.278-1.842.622-2.59l.012-.026-.002-.002c-.293-.418-.51-.953-.63-1.545l-.005-.024a5.352 5.352 0 01.093-2.49c.262-.915.777-1.701 1.536-2.269.06-.045.123-.09.186-.132-.159-1.493-.119-2.73.112-3.67.127-.518.314-.95.562-1.287.27-.368.614-.622 1.015-.737.266-.076.54-.059.797.042zm4.116 9.09c.936 0 1.8.313 2.446.855.63.527 1.005 1.235 1.005 1.94 0 .888-.406 1.58-1.133 2.022-.62.375-1.451.557-2.403.557-1.009 0-1.871-.259-2.493-.734-.617-.47-.963-1.13-.963-1.845 0-.707.398-1.417 1.056-1.946.668-.537 1.55-.849 2.485-.849zm0 .896a3.07 3.07 0 00-1.916.65c-.461.37-.722.835-.722 1.25 0 .428.21.829.61 1.134.455.347 1.124.548 1.943.548.799 0 1.473-.147 1.932-.426.463-.28.7-.686.7-1.257 0-.423-.246-.89-.683-1.256-.484-.405-1.14-.643-1.864-.643zm.662 1.21l.004.004c.12.151.095.37-.056.49l-.292.23v.446a.375.375 0 01-.376.373.375.375 0 01-.376-.373v-.46l-.271-.218a.347.347 0 01-.052-.49.353.353 0 01.494-.051l.215.172.22-.174a.353.353 0 01.49.051zm-5.04-1.919c.478 0 .867.39.867.871a.87.87 0 01-.868.871.87.87 0 01-.867-.87.87.87 0 01.867-.872zm8.706 0c.48 0 .868.39.868.871a.87.87 0 01-.868.871.87.87 0 01-.867-.87.87.87 0 01.867-.872zM7.44 2.3l-.003.002a.659.659 0 00-.285.238l-.005.006c-.138.189-.258.467-.348.832-.17.692-.216 1.631-.124 2.782.43-.128.899-.208 1.404-.237l.01-.001.019-.034c.046-.082.095-.161.148-.239.123-.771.022-1.692-.253-2.444-.134-.364-.297-.65-.453-.813a.628.628 0 00-.107-.09L7.44 2.3zm9.174.04l-.002.001a.628.628 0 00-.107.09c-.156.163-.32.45-.453.814-.29.794-.387 1.776-.23 2.572l.058.097.008.014h.03a5.184 5.184 0 011.466.212c.086-1.124.038-2.043-.128-2.722-.09-.365-.21-.643-.349-.832l-.004-.006a.659.659 0 00-.285-.239h-.004z"
+        fill={fillColor}
+        fillRule="evenodd"
+      />
+    </svg>
+  );
+};
+
+const CustomApiLogo: React.FC<{ size?: number; isSelected?: boolean; isLight?: boolean }> = ({
+  size = 24,
+  isSelected,
+  isLight,
+}) => {
+  const strokeColor = isSelected ? '#a855f7' : isLight ? '#111827' : '#ffffff';
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={strokeColor} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="6" rx="2" />
+      <rect x="3" y="14" width="18" height="6" rx="2" />
+      <circle cx="7" cy="7" r="1.2" fill={strokeColor} />
+      <circle cx="7" cy="17" r="1.2" fill={strokeColor} />
+      <path d="M14 7h3M14 17h3" />
+    </svg>
+  );
+};
+
+const PROVIDER_LOGOS: Record<AIProvider, React.FC<{ size?: number; isSelected?: boolean; isLight?: boolean }>> = {
+  openai: OpenAILogo,
+  anthropic: ClaudeLogo,
+  gemini: GeminiLogo,
+  deepseek: DeepSeekLogo,
+  meta: MetaLogo,
+  qwen: QwenLogo,
+  mistral: MistralLogo,
+  grok: GrokLogo,
+  kimi: KimiLogo,
+  zhipu: ZhipuLogo,
+  openrouter: OpenRouterLogo,
+  ollama: OllamaLogo,
+  custom: CustomApiLogo,
+};
+
+export const AISettingsModal: React.FC<AISettingsModalProps> = ({
+  isOpen,
+  onClose,
+  onSaved,
+}) => {
+  const { theme } = useTheme();
+  const isLight = theme === 'light';
+
+  const [activeTab, setActiveTab] = useState<AITab>('provider');
+  const [settings, setSettings] = useState<AIApiSettings>(DEFAULT_AI_SETTINGS);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{
+    success: boolean;
+    latencyMs: number;
+    message?: string;
+  } | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSettings(getAISettings());
+      setTestResult(null);
+      setSaveSuccess(false);
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const handleProviderChange = (provider: AIProvider) => {
+    const preset = PROVIDER_PRESETS[provider];
+    setSettings((prev) => ({
+      ...prev,
+      provider,
+      baseUrl: preset.defaultBaseUrl,
+      model: preset.defaultModel,
+    }));
+    setTestResult(null);
+  };
+
+  const handleTestConnection = async () => {
+    setIsTesting(true);
+    setTestResult(null);
+    try {
+      const result = await testAIConnection(settings);
+      setTestResult(result);
+    } catch (err: any) {
+      setTestResult({
+        success: false,
+        latencyMs: 0,
+        message: err?.message || 'Connection test failed',
+      });
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  const handleSave = () => {
+    saveAISettings(settings);
+    setSaveSuccess(true);
+    if (onSaved) onSaved();
+    setTimeout(() => {
+      setSaveSuccess(false);
+      onClose();
+    }, 600);
+  };
+
+  const handleReset = () => {
+    setSettings(DEFAULT_AI_SETTINGS);
+    setTestResult(null);
+  };
+
+  const currentPreset = PROVIDER_PRESETS[settings.provider];
+
+  const tabs: { id: AITab; label: string; icon: keyof typeof LucideIcons; badge?: string }[] = [
+    { id: 'provider', label: 'Provider & Model', icon: 'Cpu', badge: settings.provider.toUpperCase() },
+    { id: 'credentials', label: 'API Key & Auth', icon: 'Key', badge: settings.apiKey ? 'SET' : 'NONE' },
+    { id: 'parameters', label: 'Parameters', icon: 'Sliders' },
+    { id: 'prompt', label: 'System Persona', icon: 'Brain' },
+    { id: 'diagnostics', label: 'Health & Test', icon: 'Activity', badge: testResult?.success ? 'PASS' : undefined },
+  ];
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 100,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '20px',
+        boxSizing: 'border-box',
+        backgroundColor: 'rgba(0, 0, 0, 0.80)',
+        backdropFilter: 'blur(24px)',
+        WebkitBackdropFilter: 'blur(24px)',
+        userSelect: 'none',
+        fontFamily: 'var(--font-apple-text)',
+      }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: '840px',
+          maxWidth: '96vw',
+          height: '560px',
+          maxHeight: '92vh',
+          borderRadius: '16px',
+          boxSizing: 'border-box',
+          background: isLight
+            ? 'linear-gradient(180deg, #ffffff, #f7f7f9)'
+            : 'linear-gradient(180deg, #181820 0%, #0d0d12 100%)',
+          border: isLight ? '1px solid rgba(0,0,0,0.12)' : '1px solid rgba(255, 255, 255, 0.12)',
+          boxShadow: isLight
+            ? '0 24px 60px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0,0,0,0.06)'
+            : '0 30px 80px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(255, 255, 255, 0.08)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          textAlign: 'left',
+        }}
+      >
+        {/*  1. Modal Title Bar (Matching Main Settings Modal) */}
+        <div
+          style={{
+            height: '48px',
+            padding: '0 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            borderBottom: isLight ? '1px solid rgba(0, 0, 0, 0.08)' : '1px solid rgba(255, 255, 255, 0.08)',
+            backgroundColor: isLight ? '#eaeaea' : '#22222a',
+            flexShrink: 0,
+            boxSizing: 'border-box',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <LucideIcons.Sparkles size={17} style={{ color: isLight ? '#7c3aed' : '#a855f7' }} />
+            <h2
+              style={{
+                fontSize: '14px',
+                fontWeight: 600,
+                color: isLight ? '#1d1d1f' : '#ffffff',
+                margin: 0,
+                letterSpacing: '-0.02em',
+              }}
+            >
+              AI Assistant API Settings
+            </h2>
+            <span
+              style={{
+                fontSize: '10.5px',
+                fontWeight: 700,
+                padding: '2px 7px',
+                borderRadius: '4px',
+                backgroundColor: isLight ? 'rgba(124, 58, 237, 0.12)' : 'rgba(168, 85, 247, 0.18)',
+                color: isLight ? '#7c3aed' : '#c084fc',
+                letterSpacing: '0.02em',
+              }}
+            >
+              LLM BRAIN
+            </span>
+          </div>
+
+          <button
+            onClick={onClose}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: isLight ? '#6e6e73' : 'rgba(255, 255, 255, 0.45)',
+              cursor: 'pointer',
+              padding: '6px',
+              borderRadius: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'color 0.15s ease, transform 0.15s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = isLight ? '#1d1d1f' : '#ffffff';
+              e.currentTarget.style.transform = 'scale(1.1)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = isLight ? '#6e6e73' : 'rgba(255, 255, 255, 0.45)';
+              e.currentTarget.style.transform = 'scale(1)';
+            }}
+            title="Close"
+          >
+            <LucideIcons.X size={16} />
+          </button>
+        </div>
+
+        {/*  2. Two-Column Layout (Sidebar + Tab View) */}
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+          {/* Left Sidebar Navigation */}
+          <div
+            style={{
+              width: '210px',
+              borderRight: isLight ? '1px solid rgba(0, 0, 0, 0.08)' : '1px solid rgba(255, 255, 255, 0.08)',
+              backgroundColor: isLight ? '#f2f2f5' : '#14141c',
+              padding: '10px 8px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '4px',
+              flexShrink: 0,
+              boxSizing: 'border-box',
+            }}
+          >
+            {tabs.map((t) => {
+              const IconComp = (LucideIcons as any)[t.icon] || LucideIcons.Circle;
+              const isActive = activeTab === t.id;
+
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setActiveTab(t.id)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    backgroundColor: isActive
+                      ? isLight ? '#0071e3' : '#007aff'
+                      : 'transparent',
+                    color: isActive
+                      ? '#ffffff'
+                      : isLight ? '#333333' : '#cccccc',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: isActive ? 600 : 500,
+                    textAlign: 'left',
+                    transition: 'all 0.12s ease',
+                    boxShadow: isActive ? '0 2px 6px rgba(0, 122, 255, 0.35)' : 'none',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.backgroundColor = isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.06)';
+                      e.currentTarget.style.color = isLight ? '#000000' : '#ffffff';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                      e.currentTarget.style.color = isLight ? '#333333' : '#cccccc';
+                    }
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <IconComp size={14} />
+                    <span>{t.label}</span>
+                  </div>
+                  {t.badge && (
+                    <span
+                      style={{
+                        fontSize: '9px',
+                        fontWeight: 700,
+                        padding: '1.5px 5px',
+                        borderRadius: '4px',
+                        backgroundColor: isActive
+                          ? 'rgba(255, 255, 255, 0.25)'
+                          : isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)',
+                        color: isActive ? '#ffffff' : isLight ? '#666666' : '#aaaaaa',
+                      }}
+                    >
+                      {t.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Right Tab Content View */}
+          <div
+            style={{
+              flex: 1,
+              overflowY: 'auto',
+              padding: '20px 24px',
+              boxSizing: 'border-box',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '18px',
+            }}
+          >
+            {/* TAB 1: Provider & Model */}
+            {activeTab === 'provider' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div>
+                  <h3 style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: 600, color: isLight ? '#111827' : '#ffffff' }}>
+                    Model Provider & Endpoint
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '11.5px', color: isLight ? '#6b7280' : '#9ca3af' }}>
+                    Select your preferred AI cloud provider or local LLM server.
+                  </p>
+                </div>
+
+                {/* Provider Selection Grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(84px, 1fr))', gap: '8px' }}>
+                  {(Object.keys(PROVIDER_PRESETS) as AIProvider[]).map((pKey) => {
+                    const p = PROVIDER_PRESETS[pKey];
+                    const isActive = settings.provider === pKey;
+                    const LogoComponent = PROVIDER_LOGOS[pKey] || CustomApiLogo;
+
+                    const shortName =
+                      pKey === 'openai' ? 'OpenAI' :
+                      pKey === 'anthropic' ? 'Claude' :
+                      pKey === 'gemini' ? 'Gemini' :
+                      pKey === 'deepseek' ? 'DeepSeek' :
+                      pKey === 'meta' ? 'Meta Llama' :
+                      pKey === 'qwen' ? 'Qwen' :
+                      pKey === 'mistral' ? 'Mistral' :
+                      pKey === 'grok' ? 'Grok' :
+                      pKey === 'kimi' ? 'Kimi' :
+                      pKey === 'zhipu' ? 'Z.AI GLM' :
+                      pKey === 'openrouter' ? 'OpenRouter' :
+                      pKey === 'ollama' ? 'Ollama' : 'Custom';
+
+                    return (
+                      <div
+                        key={pKey}
+                        onClick={() => handleProviderChange(pKey)}
+                        title={p.name}
+                        style={{
+                          padding: '10px 6px',
+                          borderRadius: '8px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                          cursor: 'pointer',
+                          backgroundColor: isActive
+                            ? isLight ? 'rgba(0, 113, 227, 0.12)' : 'rgba(0, 122, 255, 0.18)'
+                            : isLight ? '#ffffff' : 'rgba(255, 255, 255, 0.04)',
+                          border: isActive
+                            ? '1.5px solid #007aff'
+                            : isLight ? '1px solid rgba(0,0,0,0.1)' : '1px solid rgba(255, 255, 255, 0.08)',
+                          boxShadow: isActive ? '0 0 12px rgba(0, 122, 255, 0.25)' : 'none',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '26px' }}>
+                          <LogoComponent size={24} isSelected={isActive} isLight={isLight} />
+                        </div>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            color: isActive ? '#007aff' : isLight ? '#111827' : '#ffffff',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            maxWidth: '100%',
+                          }}
+                        >
+                          {shortName}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Model & Custom Endpoint */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: isLight ? '#374151' : '#d1d5db', marginBottom: '6px' }}>
+                      Model Identifier
+                    </label>
+                    <input
+                      type="text"
+                      value={settings.model}
+                      onChange={(e) => setSettings({ ...settings, model: e.target.value })}
+                      placeholder="e.g. gpt-4o, claude-3-7-sonnet"
+                      style={{
+                        width: '100%',
+                        height: '32px',
+                        padding: '0 10px',
+                        borderRadius: '6px',
+                        fontSize: '11.5px',
+                        fontFamily: 'monospace',
+                        border: isLight ? '1px solid rgba(0,0,0,0.15)' : '1px solid rgba(255,255,255,0.15)',
+                        backgroundColor: isLight ? '#ffffff' : 'rgba(255,255,255,0.06)',
+                        color: isLight ? '#111827' : '#ffffff',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: isLight ? '#374151' : '#d1d5db', marginBottom: '6px' }}>
+                      API Base URL
+                    </label>
+                    <input
+                      type="text"
+                      value={settings.baseUrl}
+                      onChange={(e) => setSettings({ ...settings, baseUrl: e.target.value })}
+                      placeholder="https://openrouter.ai/api/v1"
+                      style={{
+                        width: '100%',
+                        height: '32px',
+                        padding: '0 10px',
+                        borderRadius: '6px',
+                        fontSize: '11.5px',
+                        fontFamily: 'monospace',
+                        border: isLight ? '1px solid rgba(0,0,0,0.15)' : '1px solid rgba(255,255,255,0.15)',
+                        backgroundColor: isLight ? '#ffffff' : 'rgba(255,255,255,0.06)',
+                        color: isLight ? '#111827' : '#ffffff',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    backgroundColor: isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.04)',
+                    border: isLight ? '1px solid rgba(0,0,0,0.08)' : '1px solid rgba(255,255,255,0.06)',
+                    fontSize: '11px',
+                    color: isLight ? '#6b7280' : '#9ca3af',
+                  }}
+                >
+                  Recommended Models: <strong style={{ color: isLight ? '#111827' : '#ffffff' }}>{currentPreset.models.join(', ')}</strong>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: API Key & Auth */}
+            {activeTab === 'credentials' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div>
+                  <h3 style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: 600, color: isLight ? '#111827' : '#ffffff' }}>
+                    API Key & Authentication
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '11.5px', color: isLight ? '#6b7280' : '#9ca3af' }}>
+                    API keys are stored strictly inside your local browser memory and never transmitted to external servers.
+                  </p>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: isLight ? '#374151' : '#d1d5db', marginBottom: '6px' }}>
+                    {currentPreset.name} API Key
+                  </label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type={showApiKey ? 'text' : 'password'}
+                      value={settings.apiKey}
+                      onChange={(e) => setSettings({ ...settings, apiKey: e.target.value })}
+                      placeholder="sk-..."
+                      style={{
+                        flex: 1,
+                        height: '34px',
+                        padding: '0 12px',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        fontFamily: showApiKey ? 'monospace' : 'inherit',
+                        border: isLight ? '1px solid rgba(0,0,0,0.15)' : '1px solid rgba(255,255,255,0.15)',
+                        backgroundColor: isLight ? '#ffffff' : 'rgba(255,255,255,0.06)',
+                        color: isLight ? '#111827' : '#ffffff',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowApiKey(!showApiKey)}
+                      style={{
+                        padding: '0 12px',
+                        borderRadius: '6px',
+                        fontSize: '11.5px',
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                        border: isLight ? '1px solid rgba(0,0,0,0.15)' : '1px solid rgba(255,255,255,0.18)',
+                        backgroundColor: isLight ? '#ffffff' : 'rgba(255,255,255,0.08)',
+                        color: isLight ? '#1d1d1f' : '#ffffff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      {showApiKey ? <LucideIcons.EyeOff size={13} /> : <LucideIcons.Eye size={13} />}
+                      <span>{showApiKey ? 'Hide' : 'Show'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    padding: '12px 14px',
+                    borderRadius: '8px',
+                    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                    border: '1px solid rgba(16, 185, 129, 0.25)',
+                    fontSize: '11px',
+                    color: '#10b981',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px',
+                  }}
+                >
+                  <span style={{ fontWeight: 700 }}>🔒 Secure Client-Side Storage</span>
+                  <span>When configured, Copilot bypasses heuristic rules and uses 100% real LLM neural reasoning.</span>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: Parameters */}
+            {activeTab === 'parameters' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div>
+                  <h3 style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: 600, color: isLight ? '#111827' : '#ffffff' }}>
+                    Inference & Sampling Parameters
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '11.5px', color: isLight ? '#6b7280' : '#9ca3af' }}>
+                    Control creativity temperature and max completion tokens.
+                  </p>
+                </div>
+
+                {/* Temperature */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <label style={{ fontSize: '11.5px', fontWeight: 600, color: isLight ? '#374151' : '#d1d5db' }}>
+                      Temperature ({settings.temperature.toFixed(2)})
+                    </label>
+                    <span style={{ fontSize: '10.5px', color: isLight ? '#6b7280' : '#9ca3af' }}>
+                      {settings.temperature < 0.3 ? 'Deterministic / Strict Coding' : settings.temperature > 0.7 ? 'Creative Strategy Explorer' : 'Balanced Quant Copilot'}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={settings.temperature}
+                    onChange={(e) => setSettings({ ...settings, temperature: parseFloat(e.target.value) })}
+                    style={{ width: '100%', accentColor: '#007aff', cursor: 'pointer' }}
+                  />
+                </div>
+
+                {/* Max Tokens */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: isLight ? '#374151' : '#d1d5db', marginBottom: '6px' }}>
+                    Max Completion Tokens ({settings.maxTokens} Tokens)
+                  </label>
+                  <input
+                    type="number"
+                    step={256}
+                    min={512}
+                    max={16384}
+                    value={settings.maxTokens}
+                    onChange={(e) => setSettings({ ...settings, maxTokens: parseInt(e.target.value) || 2048 })}
+                    style={{
+                      width: '100%',
+                      height: '32px',
+                      padding: '0 10px',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontFamily: 'var(--font-apple-numbers)',
+                      border: isLight ? '1px solid rgba(0,0,0,0.15)' : '1px solid rgba(255,255,255,0.15)',
+                      backgroundColor: isLight ? '#ffffff' : 'rgba(255,255,255,0.06)',
+                      color: isLight ? '#111827' : '#ffffff',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* TAB 4: System Prompt */}
+            {activeTab === 'prompt' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <h3 style={{ margin: '0 0 2px 0', fontSize: '15px', fontWeight: 600, color: isLight ? '#111827' : '#ffffff' }}>
+                      System Persona & Instruction Prompt
+                    </h3>
+                    <p style={{ margin: 0, fontSize: '11px', color: isLight ? '#6b7280' : '#9ca3af' }}>
+                      Instructs the LLM on Quant DAG architecture rules and Action Protocols.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSettings({ ...settings, systemPrompt: DEFAULT_AI_SETTINGS.systemPrompt })}
+                    style={{
+                      padding: '4px 8px',
+                      borderRadius: '5px',
+                      fontSize: '11px',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      border: isLight ? '1px solid rgba(0,0,0,0.15)' : '1px solid rgba(255,255,255,0.18)',
+                      backgroundColor: isLight ? '#ffffff' : 'rgba(255,255,255,0.08)',
+                      color: isLight ? '#1d1d1f' : '#ffffff',
+                    }}
+                  >
+                    Reset Default Prompt
+                  </button>
+                </div>
+
+                <textarea
+                  rows={10}
+                  value={settings.systemPrompt}
+                  onChange={(e) => setSettings({ ...settings, systemPrompt: e.target.value })}
+                  style={{
+                    width: '100%',
+                    height: '240px',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    fontSize: '11.5px',
+                    fontFamily: 'monospace',
+                    lineHeight: 1.5,
+                    border: isLight ? '1px solid rgba(0,0,0,0.15)' : '1px solid rgba(255,255,255,0.15)',
+                    backgroundColor: isLight ? '#ffffff' : 'rgba(255,255,255,0.04)',
+                    color: isLight ? '#111827' : '#ffffff',
+                    outline: 'none',
+                    resize: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+            )}
+
+            {/* TAB 5: Health & Test Diagnostics */}
+            {activeTab === 'diagnostics' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div>
+                  <h3 style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: 600, color: isLight ? '#111827' : '#ffffff' }}>
+                    API Diagnostics & Live Test
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '11.5px', color: isLight ? '#6b7280' : '#9ca3af' }}>
+                    Verify network reachability and measuring round-trip latency to the AI model.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleTestConnection}
+                  disabled={isTesting}
+                  style={{
+                    height: '36px',
+                    padding: '0 16px',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: isTesting ? 'not-allowed' : 'pointer',
+                    border: 'none',
+                    backgroundColor: isLight ? '#0071e3' : '#007aff',
+                    color: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    boxShadow: '0 1px 6px rgba(0, 122, 255, 0.4)',
+                  }}
+                >
+                  {isTesting ? (
+                    <>
+                      <LucideIcons.Loader2 size={14} className="animate-spin" />
+                      <span>Testing Endpoint Latency...</span>
+                    </>
+                  ) : (
+                    <>
+                      <LucideIcons.Activity size={14} />
+                      <span>Run Live Connectivity Test</span>
+                    </>
+                  )}
+                </button>
+
+                {testResult && (
+                  <div
+                    style={{
+                      padding: '14px 16px',
+                      borderRadius: '8px',
+                      backgroundColor: testResult.success ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                      border: `1px solid ${testResult.success ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '10px',
+                    }}
+                  >
+                    {testResult.success ? (
+                      <LucideIcons.CheckCircle2 size={18} style={{ color: '#10b981', flexShrink: 0, marginTop: '2px' }} />
+                    ) : (
+                      <LucideIcons.AlertCircle size={18} style={{ color: '#ef4444', flexShrink: 0, marginTop: '2px' }} />
+                    )}
+                    <div>
+                      <span style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: testResult.success ? '#10b981' : '#ef4444' }}>
+                        {testResult.success ? 'Connected Successfully' : 'Connection Failed'}
+                      </span>
+                      <span style={{ fontSize: '11.5px', color: isLight ? '#374151' : '#d1d5db' }}>
+                        {testResult.success
+                          ? `Model responded in ${testResult.latencyMs}ms with valid completion tokens.`
+                          : testResult.message}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/*  3. Modal Footer Bar (Matching Main Settings Modal) */}
+        <div
+          style={{
+            height: '48px',
+            padding: '0 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            borderTop: isLight ? '1px solid rgba(0, 0, 0, 0.08)' : '1px solid rgba(255, 255, 255, 0.08)',
+            backgroundColor: isLight ? '#eaeaea' : '#22222a',
+            flexShrink: 0,
+            boxSizing: 'border-box',
+          }}
+        >
+          <button
+            onClick={handleReset}
+            style={{
+              padding: '6px 12px',
+              borderRadius: '6px',
+              fontSize: '11.5px',
+              fontWeight: 500,
+              cursor: 'pointer',
+              border: isLight ? '1px solid rgba(0,0,0,0.12)' : '1px solid rgba(255,255,255,0.15)',
+              backgroundColor: 'transparent',
+              color: isLight ? '#6e6e73' : '#9ca3af',
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = isLight ? '#1d1d1f' : '#ffffff';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = isLight ? '#6e6e73' : '#9ca3af';
+            }}
+          >
+            Reset Defaults
+          </button>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <button
+              onClick={onClose}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                border: isLight ? '1px solid rgba(0,0,0,0.15)' : '1px solid rgba(255,255,255,0.18)',
+                backgroundColor: isLight ? '#ffffff' : 'rgba(255,255,255,0.08)',
+                color: isLight ? '#1d1d1f' : '#ffffff',
+                transition: 'background-color 0.15s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = isLight ? '#f5f5f7' : 'rgba(255, 255, 255, 0.16)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = isLight ? '#ffffff' : 'rgba(255, 255, 255, 0.08)';
+              }}
+            >
+              Cancel
+            </button>
+
+            <button
+              onClick={handleSave}
+              style={{
+                padding: '6px 18px',
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                border: 'none',
+                backgroundColor: saveSuccess ? '#10b981' : isLight ? '#0071e3' : '#007aff',
+                color: '#ffffff',
+                boxShadow: '0 1px 6px rgba(0, 122, 255, 0.4)',
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={(e) => {
+                if (!saveSuccess) e.currentTarget.style.backgroundColor = isLight ? '#0077ed' : '#0a84ff';
+              }}
+              onMouseLeave={(e) => {
+                if (!saveSuccess) e.currentTarget.style.backgroundColor = isLight ? '#0071e3' : '#007aff';
+              }}
+            >
+              {saveSuccess ? 'Saved ✓' : 'Save Settings'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AISettingsModal;
