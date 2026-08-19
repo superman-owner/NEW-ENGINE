@@ -1,623 +1,418 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { AnalyticsDrawer } from './components/BottomPanel/AnalyticsDrawer';
-import { TopNav } from './components/Header/TopNav';
-import { MT5DeployModal } from './components/Modals/MT5DeployModal';
-import { LiveNeuralLink } from './components/NeuralLink/LiveNeuralLink';
-import { FlowCanvasView } from './components/Flow/FlowCanvasView';
-import { MacOSAssistantSidebar } from './components/AIAssistant/MacOSAssistantSidebar';
-import { RobotAvatar } from './components/AIAssistant/RobotAvatar';
-import { NodePalette } from './components/Sidebar/NodePalette';
-import { INITIAL_LOGS } from './data/mockAnalytics';
-import { fxforgeEngine } from './services/fxforgeEngine';
-import type { QuantTelemetry, RLEnvironmentStep } from './services/fxforgeEngine';
-import { ThemeProvider, useTheme } from './context/ThemeContext';
-import { FlowProvider, useFlow } from './context/FlowContext';
+import React, { useState, useRef, useEffect } from 'react';
+import { 
+  Activity, 
+  Layers, 
+  TrendingUp, 
+  Cpu, 
+  ShieldCheck, 
+  BarChart3, 
+  FileCode2 
+} from 'lucide-react';
+import { TopNavbar } from './components/TopNavbar';
+import { SidebarControls } from './components/SidebarControls';
+import { MasterTachometer } from './components/MasterTachometer';
+import { WalkForwardChart } from './components/WalkForwardChart';
+import { Neural3DLink } from './components/Neural3DLink';
+import { TradesJournal } from './components/TradesJournal';
+import { MonteCarloStressTest } from './components/MonteCarloStressTest';
+import { LiveTensorBar } from './components/LiveTensorBar';
+import { CreatePresetModal } from './components/CreatePresetModal';
+import { EngineSettingsModal } from './components/EngineSettingsModal';
+import { PPOEngine } from './services/ppoEngine';
+import { generateMQL5Expert } from './services/onnxMql5Generator';
+import type { StrategyPreset, EpochTelemetry, TradeRecord, QuantFeatures, EngineSettings } from './types/ppo';
 
-import { ProjectManagerModal } from './components/Modals/ProjectManagerModal';
-import { AISettingsModal } from './components/Modals/AISettingsModal';
-import { MainSettingsModal } from './components/Modals/MainSettingsModal';
-import { ConfirmDialog } from './components/Modals/ConfirmDialog';
-import {
-  getSavedProjects,
-  getActiveProjectId,
-  exportProjectToFile,
-  importProjectFromFile,
-  saveCurrentProject,
-  createNewBlankProject,
-} from './services/projectService';
+const INITIAL_PRESETS: StrategyPreset[] = [
+  {
+    id: 'gold_institutional_ppo',
+    name: '🥇 Gold Institutional PPO (XAUUSD)',
+    symbol: 'XAUUSD',
+    timeframe: 'M15',
+    bars: '10,000',
+    episodes: 300,
+    modelType: 'PPO Actor-Critic (12 Quant Features)',
+    description: 'High-Frequency Gold Scalper with GAE Advantage & Drawdown Guard',
+    spread: 0.00015,
+    actorLr: 0.0003,
+    criticLr: 0.0010,
+    clipEps: 0.20,
+    gamma: 0.99,
+    gaeLambda: 0.95,
+  },
+  {
+    id: 'bpnn_4layer_alpha',
+    name: '🔮 1. BPNN 4-Layer Alpha Strategy (5➔6➔6➔3)',
+    symbol: 'XAUUSD',
+    timeframe: 'M15',
+    bars: '10,000',
+    episodes: 350,
+    modelType: 'Standalone BPNN (Rprop+)',
+    description: '5-Pillar Features to 4-Layer Backpropagation Neural Network & MT5 Bot',
+    spread: 0.00015,
+    actorLr: 0.0005,
+    criticLr: 0.0015,
+    clipEps: 0.20,
+    gamma: 0.99,
+    gaeLambda: 0.95,
+  },
+  {
+    id: 'lightgbm_triple_barrier',
+    name: '🧠 2. LightGBM + Triple Barrier Alpha',
+    symbol: 'BTCUSD',
+    timeframe: 'M15',
+    bars: '20,000',
+    episodes: 300,
+    modelType: 'LightGBM + Triple Barrier',
+    description: 'Triple-Barrier labeling with Purged Walk-Forward CV & LightGBM',
+    spread: 0.00030,
+    actorLr: 0.0003,
+    criticLr: 0.0010,
+    clipEps: 0.20,
+    gamma: 0.99,
+    gaeLambda: 0.95,
+  },
+  {
+    id: 'lstm_deep_sequence',
+    name: '🌊 3. PyTorch Neural Sequence (LSTM Deep)',
+    symbol: 'ETHUSD',
+    timeframe: 'H1',
+    bars: '20,000',
+    episodes: 400,
+    modelType: 'PyTorch LSTM (60-bar Lookback)',
+    description: 'Multi-scale sequence modeling with Lookback Window of 60 bars',
+    spread: 0.00025,
+    actorLr: 0.0002,
+    criticLr: 0.0008,
+    clipEps: 0.20,
+    gamma: 0.99,
+    gaeLambda: 0.95,
+  },
+  {
+    id: 'fx_fast_scalper',
+    name: '⚡ 4. FX Multi-Horizon PPO (EURUSD)',
+    symbol: 'EURUSD',
+    timeframe: 'M15',
+    bars: '10,000',
+    episodes: 250,
+    modelType: 'PPO Actor-Critic (12 Quant Features)',
+    description: 'Low-friction Forex Scalper optimized for London/NY overlaps',
+    spread: 0.00008,
+    actorLr: 0.0003,
+    criticLr: 0.0010,
+    clipEps: 0.20,
+    gamma: 0.99,
+    gaeLambda: 0.95,
+  },
+  {
+    id: 'crypto_momentum',
+    name: '🚀 5. Crypto Momentum Trend (BTCUSD)',
+    symbol: 'BTCUSD',
+    timeframe: 'H1',
+    bars: '20,000',
+    episodes: 450,
+    modelType: 'PPO Actor-Critic (12 Quant Features)',
+    description: 'High-volatility momentum surfer with Volatility & EMA filtering',
+    spread: 0.00035,
+    actorLr: 0.0004,
+    criticLr: 0.0012,
+    clipEps: 0.25,
+    gamma: 0.99,
+    gaeLambda: 0.95,
+  },
+  {
+    id: 'volatility_orderflow_breaker',
+    name: '💎 6. Volatility & Orderflow Breaker (US30)',
+    symbol: 'US30',
+    timeframe: 'M5',
+    bars: '15,000',
+    episodes: 350,
+    modelType: 'PPO Actor-Critic (12 Quant Features)',
+    description: 'Intraday US30 Dow Jones volatility expansion capture',
+    spread: 0.00020,
+    actorLr: 0.0003,
+    criticLr: 0.0010,
+    clipEps: 0.20,
+    gamma: 0.99,
+    gaeLambda: 0.95,
+  },
+];
 
-function AppContent() {
-  const { theme } = useTheme();
-  const { nodes, edges, setNodes, setEdges, architectureSpec, syncArchitectureToEngine } = useFlow();
+const INITIAL_TELEMETRY: EpochTelemetry = {
+  epoch: 0,
+  trainReward: 0.0,
+  valReward: 0.0,
+  ma10Reward: 0.0,
+  actorLoss: 0.0,
+  criticLoss: 0.0,
+  entropy: 0.02,
+  winRate: 0.0,
+  cumReturn: 0.0,
+  sharpe: 0.0,
+  sortino: 0.0,
+  maxDrawdown: 0.0,
+  profitFactor: 0.0,
+  totalTrades: 0,
+  actionDist: { hold: 100.0, buy: 0.0, sell: 0.0 },
+};
 
-  // Active View Switcher: 'bpnn' (Live 3D BPNN Visualizer) or 'studio' (Flow DAG)
-  const [activeView, setActiveView] = useState<'studio' | 'bpnn'>('studio');
+const INITIAL_QUANT: QuantFeatures = {
+  ret1: 0.0,
+  ret3: 0.0,
+  ret8: 0.0,
+  ret21: 0.0,
+  rsi14: 0.0,
+  volAtr: 0.0,
+  emaDist: 0.0,
+  bbPctB: 0.0,
+  sessionSin: 0.0,
+  sessionCos: 1.0,
+  posState: 0.0,
+  unrealizedPnl: 0.0,
+};
 
-  // Sidebar Collapsed State (Active on both views, collapsible to the left)
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+export const App: React.FC = () => {
+  const [presets, setPresets] = useState<StrategyPreset[]>(INITIAL_PRESETS);
+  const [currentPreset, setCurrentPreset] = useState<StrategyPreset>(INITIAL_PRESETS[0]);
+  
+  const [symbol, setSymbol] = useState(INITIAL_PRESETS[0].symbol);
+  const [timeframe, setTimeframe] = useState(INITIAL_PRESETS[0].timeframe);
+  const [bars, setBars] = useState(INITIAL_PRESETS[0].bars);
+  const [episodes, setEpisodes] = useState(INITIAL_PRESETS[0].episodes);
+  const [actorLr, setActorLr] = useState(INITIAL_PRESETS[0].actorLr);
+  const [criticLr, setCriticLr] = useState(INITIAL_PRESETS[0].criticLr);
+  const [clipEps, setClipEps] = useState(INITIAL_PRESETS[0].clipEps);
 
-  // Logs State
-  const [logs, setLogs] = useState<string[]>(INITIAL_LOGS);
+  const [activeTab, setActiveTab] = useState<'chart' | 'neural' | 'journal' | 'montecarlo'>('chart');
+  const [isTraining, setIsTraining] = useState(false);
+  const [trainingProgress, setTrainingProgress] = useState(0);
 
-  // RL Live Telemetry & Control State (START, PAUSE, STOP) - Default strictly 'stopped' (Standby)
-  const [rlStatus, setRlStatus] = useState<'running' | 'paused' | 'stopped'>('stopped');
-  const rlStatusRef = useRef(rlStatus);
-  useEffect(() => {
-    rlStatusRef.current = rlStatus;
-  }, [rlStatus]);
+  const [telemetry, setTelemetry] = useState<EpochTelemetry>(INITIAL_TELEMETRY);
+  const [quantVector, setQuantVector] = useState<QuantFeatures>(INITIAL_QUANT);
+  const [trades, setTrades] = useState<TradeRecord[]>([]);
 
-  const [rlTelemetry, setRlTelemetry] = useState<QuantTelemetry>(() => {
-    fxforgeEngine.reset();
-    return fxforgeEngine.getTelemetry();
+  const [trainHistory, setTrainHistory] = useState<number[]>([]);
+  const [valHistory, setValHistory] = useState<number[]>([]);
+  const [maHistory, setMaHistory] = useState<number[]>([]);
+
+  const [isCreatePresetOpen, setIsCreatePresetOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  const [settings, setSettings] = useState<EngineSettings>({
+    spreadPips: 1.5,
+    slippagePips: 0.5,
+    maxDrawdownLimit: 3.0,
+    idlePenalty: 0.00003,
+    opportunityCost: 0.35,
+    mt5Directory: 'C:/Users/ASUS/AppData/Roaming/MetaQuotes/Terminal/Common/Files',
+    autoDeployOnComplete: true,
   });
-  const [rlLatestStep, setRlLatestStep] = useState<RLEnvironmentStep | null>(null);
-  const [isMT5DeployOpen, setIsMT5DeployOpen] = useState(false);
-  const [isProjectManagerOpen, setIsProjectManagerOpen] = useState(false);
-  const [isAISettingsOpen, setIsAISettingsOpen] = useState(false);
-  const [isMainSettingsOpen, setIsMainSettingsOpen] = useState(false);
-  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
-  const [currentProjectName, setCurrentProjectName] = useState<string>('Untitled Project');
-  const [cameraResetTrigger, setCameraResetTrigger] = useState(0);
-  const [appAlert, setAppAlert] = useState<string | null>(null);
-  const fileImportInputRef = useRef<HTMLInputElement>(null);
 
-  // Listen for blueprint loads to sync active project name
-  useEffect(() => {
-    const handleBlueprintLoad = (e: any) => {
-      if (e.detail?.name) {
-        setCurrentProjectName(e.detail.name);
-      }
-    };
-    window.addEventListener('fxforge-load-blueprint', handleBlueprintLoad);
-    return () => window.removeEventListener('fxforge-load-blueprint', handleBlueprintLoad);
-  }, []);
+  const engineRef = useRef(new PPOEngine());
 
-  // Ensure stale processes are killed on fresh page boot
-  useEffect(() => {
-    fetch('/api/train/stop', { method: 'POST' }).catch(() => {});
-  }, []);
+  const handleSelectPreset = (preset: StrategyPreset) => {
+    setCurrentPreset(preset);
+    setSymbol(preset.symbol);
+    setTimeframe(preset.timeframe);
+    setBars(preset.bars);
+    setEpisodes(preset.episodes);
+    setActorLr(preset.actorLr);
+    setCriticLr(preset.criticLr);
+    setClipEps(preset.clipEps);
+  };
 
-  // Real-time PyTorch Backend Process Listeners (Pure Real Deep RL Engine via SSE / Electron IPC)
-  useEffect(() => {
-    const processStdout = (text: string) => {
-      const lines = text.split('\n').filter((l: string) => l.trim().length > 0);
-      setLogs((prev) => [...prev.slice(-150), ...lines]);
+  const handleStartTraining = () => {
+    setIsTraining(true);
+    setTrainingProgress(0);
+    setTrainHistory([]);
+    setValHistory([]);
+    setMaHistory([]);
+    setTrades([]);
 
-      lines.forEach((line: string) => {
-        if (line.includes('"type": "progress"')) {
-          if (rlStatusRef.current !== 'running') return; // Read live ref so events are never dropped!
-          try {
-            const jsonStr = line.substring(line.indexOf('{'), line.lastIndexOf('}') + 1);
-            const data = JSON.parse(jsonStr);
-            const { telemetry, step } = fxforgeEngine.recordPyTorchProgress(data);
-            setRlTelemetry(telemetry);
-            setRlLatestStep(step);
-          } catch (e) {}
-        }
-      });
-    };
+    const nBars = parseInt(bars.replace(/,/g, '')) || 10000;
+    engineRef.current.initPrices(symbol, nBars);
 
-    const processStderr = (text: string) => {
-      setLogs((prev) => [...prev.slice(-150), `[PYTORCH] ${text.trim()}`]);
-    };
+    engineRef.current.runSimulation(
+      episodes,
+      (newTel, newTrades, latestQuant) => {
+        setTelemetry(newTel);
+        setQuantVector(latestQuant);
+        setTrades(newTrades);
+        setTrainingProgress((newTel.epoch / episodes) * 100);
 
-    const processFinished = (code: number) => {
-      setLogs((prev) => [
-        ...prev,
-        `[PYTORCH] ✅ Real Training completed (Code: ${code}). Single-file ONNX model exported to MT5.`,
-      ]);
-    };
-
-    // 1. Electron IPC Listener
-    const electron = (window as any).electronAPI;
-    let unsubOut: any, unsubErr: any, unsubDone: any;
-    if (electron && typeof electron.on === 'function') {
-      unsubOut = electron.on('training-stdout', processStdout);
-      unsubErr = electron.on('training-stderr', processStderr);
-      unsubDone = electron.on('training-finished', ({ code }: { code: number }) => processFinished(code));
-    }
-
-    // 2. Web Browser SSE Stream Listener
-    let eventSource: EventSource | null = null;
-    try {
-      eventSource = new EventSource('/api/train/stream');
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type === 'stdout') processStdout(data.text);
-          else if (data.type === 'stderr') processStderr(data.text);
-          else if (data.type === 'finished') processFinished(data.code);
-        } catch (e) {}
-      };
-    } catch (e) {}
-
-    return () => {
-      if (typeof unsubOut === 'function') unsubOut();
-      if (typeof unsubErr === 'function') unsubErr();
-      if (typeof unsubDone === 'function') unsubDone();
-      if (eventSource) eventSource.close();
-    };
-  }, []);
-
-  // Auto-switch to Studio Flow DAG view when dropping a node from Sidebar or loading an AI blueprint
-  useEffect(() => {
-    const handleSwitchToStudio = () => {
-      if (activeView !== 'studio') {
-        setActiveView('studio');
-      }
-    };
-    window.addEventListener('fxforge-drop-node', handleSwitchToStudio);
-    window.addEventListener('fxforge-load-blueprint', handleSwitchToStudio);
-    return () => {
-      window.removeEventListener('fxforge-drop-node', handleSwitchToStudio);
-      window.removeEventListener('fxforge-load-blueprint', handleSwitchToStudio);
-    };
-  }, [activeView]);
-
-  const handleStartRL = useCallback(() => {
-    if (!nodes || nodes.length === 0) {
-      setLogs((prev) => [
-        ...prev,
-        `[RL ENGINE] ⚠️ Cannot start simulation: Canvas has 0 nodes. Please add strategy / network nodes to canvas first.`,
-      ]);
-      return;
-    }
-
-    if (rlStatus === 'stopped') {
-      fxforgeEngine.reset();
-      setRlTelemetry(fxforgeEngine.getTelemetry());
-      setRlLatestStep(null);
-    }
-    setRlStatus('running');
-    setLogs((prev) => [
-      ...prev,
-      `[NODE PIPELINE] Applying Node Config: ${architectureSpec.strategyPreset} (${architectureSpec.symbol} ${architectureSpec.timeframe})`,
-      `[NODE PIPELINE] Target Output: ${architectureSpec.targetFolder || 'MQL5/Files/'} (Opset ${architectureSpec.opsetVersion || 14})`,
-      `[NODE PIPELINE] Layers: 6 -> ${architectureSpec.hidden1Units} (${architectureSpec.hidden1Activation}) -> Dropout(${architectureSpec.dropoutRate}) -> ${architectureSpec.hidden2Units} -> 3 Actions`,
-      `[RL ENGINE] Launching Real PyTorch Training Engine (${architectureSpec.totalEpisodes || 400} Episodes)...`,
-    ]);
-
-    const payload = {
-      symbol: architectureSpec.symbol,
-      timeframe: architectureSpec.timeframe,
-      bars_count: architectureSpec.barsCount,
-      strategy_preset: architectureSpec.strategyPreset,
-      target_folder: architectureSpec.targetFolder || 'MQL5/Files/',
-      opset: architectureSpec.opsetVersion || 14,
-      export_name: architectureSpec.exportName || 'rl_trading_model.onnx',
-      hidden1_units: architectureSpec.hidden1Units,
-      hidden1_activation: architectureSpec.hidden1Activation,
-      has_dropout: architectureSpec.hasDropout,
-      dropout_rate: architectureSpec.dropoutRate,
-      has_layer_norm: architectureSpec.hasLayerNorm,
-      has_l2_decay: architectureSpec.hasL2Decay,
-      l2_decay_rate: architectureSpec.l2DecayRate,
-      hidden2_units: architectureSpec.hidden2Units,
-      hidden2_activation: architectureSpec.hidden2Activation,
-      has_residual: architectureSpec.hasResidual,
-      spread_pips: architectureSpec.spreadPips,
-      inactivity_penalty: architectureSpec.inactivityPenalty,
-      entropy_beta: architectureSpec.entropyBeta,
-      total_episodes: architectureSpec.totalEpisodes || 400,
-    };
-
-    const electron = (window as any).electronAPI;
-    if (electron && typeof electron.startRealTraining === 'function') {
-      electron.startRealTraining(payload);
-    } else {
-      // Trigger via Local Server API
-      fetch('/api/train/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      }).catch(() => {});
-    }
-  }, [architectureSpec, nodes, rlStatus]);
-
-  const handlePauseRL = useCallback(() => {
-    setRlStatus('paused');
-    setLogs((prev) => [...prev, `[RL ENGINE] Simulation paused.`]);
-  }, []);
-
-  const handleStopRL = useCallback(() => {
-    setRlStatus('stopped');
-    fxforgeEngine.reset();
-    setRlTelemetry(fxforgeEngine.getTelemetry());
-    setRlLatestStep(null);
-    setLogs((prev) => [...prev, `[RL ENGINE] Training stopped and reset to baseline.`]);
-
-    const electron = (window as any).electronAPI;
-    if (electron && typeof electron.stopRealTraining === 'function') {
-      electron.stopRealTraining();
-    } else {
-      fetch('/api/train/stop', { method: 'POST' }).catch(() => {});
-    }
-  }, []);
-
-  const handleNewProject = useCallback((preferredName?: string) => {
-    // 1. Auto-save current project if it contains nodes and has a name
-    if (nodes && nodes.length > 0) {
-      try {
-        const nameToPreserve = currentProjectName.trim() || 'Previous Strategy';
-        saveCurrentProject(
-          {
-            name: nameToPreserve,
-            type: 'Deep RL Policy',
-            symbol: architectureSpec?.symbol || 'XAUUSD',
-            timeframe: architectureSpec?.timeframe || 'M15',
-            description: 'Auto-saved before creating new project.',
-          },
-          nodes,
-          edges,
-          architectureSpec
-        );
-        setLogs((prev) => [...prev, `[STUDIO] Auto-saved previous project "${nameToPreserve}" to Library.`]);
-      } catch (e) {
-        console.warn('Auto-save error during new project creation:', e);
-      }
-    }
-
-    handleStopRL();
-
-    // 2. Create brand new project entry
-    const newProj = createNewBlankProject(preferredName || 'Untitled Project');
-    setCurrentProjectName(newProj.name);
-    setNodes([]);
-    setEdges([]);
-
-    try {
-      localStorage.setItem('fxforge_dag_nodes_v9', JSON.stringify([]));
-      localStorage.setItem('fxforge_dag_edges_v9', JSON.stringify([]));
-      localStorage.setItem('fxforge_flow_nodes', JSON.stringify([]));
-      localStorage.setItem('fxforge_flow_nodes_edges', JSON.stringify([]));
-    } catch (_) {}
-
-    // 3. Dispatch events to clear canvas view and sync project name
-    window.dispatchEvent(
-      new CustomEvent('fxforge-load-blueprint', {
-        detail: {
-          nodes: [],
-          edges: [],
-          name: newProj.name,
-        },
-      })
-    );
-    window.dispatchEvent(
-      new CustomEvent('fxforge-update-nodes', {
-        detail: { nodes: [], edges: [] },
-      })
-    );
-    setLogs((prev) => [...prev, `[STUDIO] Created new blank project "${newProj.name}" (ID: ${newProj.id}).`]);
-  }, [handleStopRL, nodes, edges, currentProjectName, architectureSpec, setNodes, setEdges]);
-
-  const handleSaveProjectDirect = useCallback(() => {
-    const nameToSave = currentProjectName.trim() || 'Untitled Project';
-    const saved = saveCurrentProject(
-      {
-        name: nameToSave,
-        type: 'Deep RL Policy',
-        symbol: architectureSpec?.symbol || 'XAUUSD',
-        timeframe: architectureSpec?.timeframe || 'M15',
-        description: 'Visual Reinforcement Learning Pipeline with Dynamic Actor-Critic NN',
+        setTrainHistory((prev) => [...prev, newTel.trainReward]);
+        setValHistory((prev) => [...prev, newTel.valReward]);
+        setMaHistory((prev) => [...prev, newTel.ma10Reward]);
       },
-      nodes,
-      edges,
-      architectureSpec
+      () => {
+        setIsTraining(false);
+      }
     );
+  };
 
-    setCurrentProjectName(saved.name);
-    setLogs((prev) => [...prev, `[STUDIO] Saved strategy "${saved.name}" (${saved.id}) to Local Library.`]);
-  }, [currentProjectName, nodes, edges, architectureSpec]);
+  const handleStopTraining = () => {
+    engineRef.current.stop();
+    setIsTraining(false);
+  };
 
-  //  Full-System AI Command & Automation Dispatcher (AI Full Permission Control Hub)
-  useEffect(() => {
-    const handleAIStart = () => {
-      handleStartRL();
-    };
-    const handleAIPause = () => {
-      handlePauseRL();
-    };
-    const handleAIStop = () => {
-      handleStopRL();
-    };
-    const handleAISave = (e: any) => {
-      if (e.detail?.name) {
-        setCurrentProjectName(e.detail.name);
-      }
-      handleSaveProjectDirect();
-    };
-    const handleAILoad = (e: any) => {
-      const proj = e.detail?.project;
-      if (proj) {
-        if (Array.isArray(proj.nodes)) {
-          setNodes(proj.nodes);
-          setEdges(proj.edges || []);
-          syncArchitectureToEngine(proj.nodes);
-        }
-        setCurrentProjectName(proj.name || 'Loaded Project');
-        window.dispatchEvent(
-          new CustomEvent('fxforge-load-blueprint', {
-            detail: {
-              nodes: proj.nodes || [],
-              edges: proj.edges || [],
-              name: proj.name,
-            },
-          })
-        );
-      }
-    };
-    const handleAIExport = () => {
-      const nameToSave = currentProjectName.trim() || 'Untitled Project';
-      const toExport = {
-        id: `mt5-${Math.floor(1000 + Math.random() * 9000)}`,
-        name: nameToSave,
-        type: 'Deep RL Policy',
-        language: 'MQL5',
-        symbol: architectureSpec?.symbol || 'XAUUSD',
-        timeframe: architectureSpec?.timeframe || 'M15',
-        nodesCount: nodes.length,
-        createdAt: new Date().toISOString(),
-        modifiedAt: new Date().toISOString(),
-        description: 'Exported strategy from FXFORGE Studio.',
-        nodes,
-        edges,
-        architectureSpec,
-      };
-      exportProjectToFile(toExport as any);
-      setLogs((prev) => [...prev, `[STUDIO] Exported strategy "${nameToSave}" as JSON file.`]);
-    };
-    const handleAIOpenModal = (e: any) => {
-      const modal = e.detail?.modal;
-      if (modal === 'deploy' || modal === 'mt5') setIsMT5DeployOpen(true);
-      else if (modal === 'projects' || modal === 'manager') setIsProjectManagerOpen(true);
-      else if (modal === 'settings' || modal === 'ai') setIsAISettingsOpen(true);
-    };
-    const handleAICloseModal = () => {
-      setIsMT5DeployOpen(false);
-      setIsProjectManagerOpen(false);
-      setIsAISettingsOpen(false);
-    };
-    const handleAIResetCamera = () => {
-      setCameraResetTrigger((prev) => prev + 1);
-    };
+  const handleExportMql5 = () => {
+    const code = generateMQL5Expert(symbol, 112233);
+    const blob = new Blob([code], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ONNX_RL_Trader_${symbol}.mq5`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
 
-    window.addEventListener('fxforge-ai-start-training', handleAIStart);
-    window.addEventListener('fxforge-ai-pause-training', handleAIPause);
-    window.addEventListener('fxforge-ai-stop-training', handleAIStop);
-    window.addEventListener('fxforge-ai-save-project', handleAISave);
-    window.addEventListener('fxforge-ai-load-project', handleAILoad);
-    window.addEventListener('fxforge-ai-export-project', handleAIExport);
-    window.addEventListener('fxforge-ai-open-modal', handleAIOpenModal);
-    window.addEventListener('fxforge-ai-close-modal', handleAICloseModal);
-    window.addEventListener('fxforge-ai-reset-camera', handleAIResetCamera);
-
-    return () => {
-      window.removeEventListener('fxforge-ai-start-training', handleAIStart);
-      window.removeEventListener('fxforge-ai-pause-training', handleAIPause);
-      window.removeEventListener('fxforge-ai-stop-training', handleAIStop);
-      window.removeEventListener('fxforge-ai-save-project', handleAISave);
-      window.removeEventListener('fxforge-ai-load-project', handleAILoad);
-      window.removeEventListener('fxforge-ai-export-project', handleAIExport);
-      window.removeEventListener('fxforge-ai-open-modal', handleAIOpenModal);
-      window.removeEventListener('fxforge-ai-close-modal', handleAICloseModal);
-      window.removeEventListener('fxforge-ai-reset-camera', handleAIResetCamera);
-    };
-  }, [handleStartRL, handlePauseRL, handleStopRL, handleSaveProjectDirect, currentProjectName, nodes, edges, architectureSpec, setNodes, setEdges, syncArchitectureToEngine]);
-
-  // Global Windows shortcuts (Ctrl+S, Ctrl+N, Ctrl+O)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey) {
-        if (e.key.toLowerCase() === 's') {
-          e.preventDefault();
-          handleSaveProjectDirect();
-        } else if (e.key.toLowerCase() === 'n') {
-          e.preventDefault();
-          handleNewProject();
-        } else if (e.key.toLowerCase() === 'o') {
-          e.preventDefault();
-          setIsProjectManagerOpen(true);
-        } else if (e.key.toLowerCase() === 'k') {
-          e.preventDefault();
-          setIsAssistantOpen((prev) => !prev);
-        }
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleSaveProjectDirect, handleNewProject]);
-
-  const handleExportProjectDirect = useCallback(() => {
-    const active = getSavedProjects().find((p) => p.id === getActiveProjectId()) || {
-      id: `mt5-${Math.floor(1000 + Math.random() * 9000)}`,
-      name: currentProjectName !== 'Untitled Project' ? currentProjectName : 'FXFORGE_Custom_Pipeline',
-      type: 'Deep RL Policy' as const,
-      language: 'MQL5' as const,
-      symbol: architectureSpec?.symbol || 'XAUUSD',
-      timeframe: architectureSpec?.timeframe || 'M15',
-      nodesCount: 0,
-      createdAt: new Date().toISOString(),
-      modifiedAt: new Date().toISOString(),
-      nodes: [],
-      edges: [],
-    };
-    exportProjectToFile(active);
-    setLogs((prev) => [...prev, `[STUDIO] Exported project "${active.name}" to JSON file.`]);
-  }, [architectureSpec, currentProjectName]);
-
-  const handleFileImportDirect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const imported = await importProjectFromFile(file);
-      if (imported.nodes && imported.nodes.length > 0) {
-        setCurrentProjectName(imported.name);
-        window.dispatchEvent(
-          new CustomEvent('fxforge-load-blueprint', {
-            detail: {
-              nodes: imported.nodes,
-              edges: imported.edges || [],
-              name: imported.name,
-            },
-          })
-        );
-      }
-      setLogs((prev) => [...prev, `[STUDIO] Imported and loaded strategy "${imported.name}".`]);
-    } catch (err: any) {
-      setAppAlert(`Import error: ${err.message}`);
-    }
-    if (fileImportInputRef.current) fileImportInputRef.current.value = '';
+  const handleDeployMT5 = () => {
+    handleExportMql5();
+    alert(`🚀 PPO Model & Expert Advisor Ready!\n\nDownloaded ONNX_RL_Trader_${symbol}.mq5 for immediate execution on your MetaTrader 5 chart.`);
   };
 
   return (
-    <div
-      className={`h-screen w-screen overflow-auto custom-scrollbar font-sans select-none antialiased transition-colors duration-200 ${
-        theme === 'light' ? 'bg-[#f5f5f7] text-[#1d1d1f]' : 'bg-[#040407] text-slate-100'
-      }`}
-    >
-      <div className="w-full h-full min-w-[1240px] min-h-[620px] flex flex-col relative overflow-hidden">
-        {/* Hidden File Input for direct TopNav import */}
-        <input
-          type="file"
-          ref={fileImportInputRef}
-          onChange={handleFileImportDirect}
-          accept=".json,.xml"
-          className="hidden"
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-black text-white">
+      {/* Top Navbar */}
+      <TopNavbar
+        presets={presets}
+        currentPreset={currentPreset}
+        onSelectPreset={handleSelectPreset}
+        onOpenCreatePreset={() => setIsCreatePresetOpen(true)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        onExportMql5={handleExportMql5}
+        onDeployMT5={handleDeployMT5}
+        isTraining={isTraining}
+        trainingProgress={trainingProgress}
+      />
+
+      {/* Main Studio Cockpit */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left Sidebar Controls */}
+        <SidebarControls
+          presets={presets}
+          currentPreset={currentPreset}
+          onSelectPreset={handleSelectPreset}
+          onOpenCreatePreset={() => setIsCreatePresetOpen(true)}
+          symbol={symbol}
+          setSymbol={setSymbol}
+          timeframe={timeframe}
+          setTimeframe={setTimeframe}
+          bars={bars}
+          setBars={setBars}
+          episodes={episodes}
+          setEpisodes={setEpisodes}
+          actorLr={actorLr}
+          setActorLr={setActorLr}
+          criticLr={criticLr}
+          setCriticLr={setCriticLr}
+          clipEps={clipEps}
+          setClipEps={setClipEps}
+          isTraining={isTraining}
+          onStartTraining={handleStartTraining}
+          onStopTraining={handleStopTraining}
         />
 
-        {/*  Top Navigation Bar */}
-        <TopNav
-          activeView={activeView}
-          onViewChange={setActiveView}
-          rlStatus={rlStatus}
-          onStartRL={handleStartRL}
-          onPauseRL={handlePauseRL}
-          onStopRL={handleStopRL}
-          rlTelemetry={rlTelemetry}
-          rlLatestStep={rlLatestStep}
-          onOpenMT5Deploy={() => setIsMT5DeployOpen(true)}
-          onResetCamera={() => setCameraResetTrigger((prev) => prev + 1)}
-          onOpenProjectManager={() => setIsProjectManagerOpen(true)}
-          onSaveProject={handleSaveProjectDirect}
-          onNewProject={handleNewProject}
-          onExportProject={handleExportProjectDirect}
-          onImportProject={() => fileImportInputRef.current?.click()}
-          projectName={currentProjectName}
-          onProjectNameChange={(newName) => {
-            setCurrentProjectName(newName);
-            setLogs((prev) => [...prev, `[STUDIO] Renamed project to "${newName}".`]);
-          }}
-          nodesCount={nodes?.length || 0}
-        />
+        {/* Center Main Stage Viewport */}
+        <main className="flex-1 flex flex-col p-4 gap-4 overflow-y-auto bg-black">
+          {/* Top Master Tachometer & KPI Matrix Card */}
+          <MasterTachometer telemetry={telemetry} />
 
-        {/*  Main Quantum Visualizer & Flow DAG Stage with Shared Left Sidebar */}
-        <div className="flex-1 flex overflow-hidden relative">
-          {/* Left Shared Sidebar (Slim Rail when Collapsed, Full Tree when Expanded) */}
-          <NodePalette
-            isCollapsed={isSidebarCollapsed}
-            onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
-            onOpenSettings={() => setIsMainSettingsOpen(true)}
-            isTraining={rlStatus === 'running'}
-          />
-
-          <main
-            className={`flex-1 h-full relative overflow-hidden transition-colors duration-200 ${
-              theme === 'light' ? 'bg-[#f5f5f7]' : 'bg-[#040407]'
-            }`}
-          >
-            <div className={`w-full h-full ${activeView === 'studio' ? 'block' : 'hidden'}`}>
-              <FlowCanvasView isTraining={rlStatus === 'running'} />
-            </div>
-            <div className={`w-full h-full ${activeView === 'bpnn' ? 'block' : 'hidden'}`}>
-              <LiveNeuralLink
-                isTraining={rlStatus === 'running'}
-                latestStep={rlLatestStep}
-                cameraResetTrigger={cameraResetTrigger}
-              />
-            </div>
-
-            {/*  Dynamic Multi-Emotion Robot Avatar Trigger Button (Hidden when assistant is open to never overlap input!) */}
-            {!isAssistantOpen && (
+          {/* Viewport Multi-Tab Switcher */}
+          <div className="flex items-center justify-between border-b border-[#1c1c24] pb-2">
+            <div className="flex gap-2">
               <button
-                id="btn-open-assistant"
-                onClick={() => setIsAssistantOpen(true)}
-                className="absolute bottom-4 right-4 z-30 flex flex-col items-center justify-center p-0 transition-all duration-300 cursor-pointer select-none outline-none border-none bg-transparent hover:scale-115 hover:-translate-y-1 active:scale-95"
-                title="Open AI Assistant (Ctrl + K)"
+                onClick={() => setActiveTab('chart')}
+                className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'chart'
+                    ? 'bg-[#007aff] text-white shadow-lg shadow-blue-950/50'
+                    : 'bg-[#0c0c10] text-[#86868b] hover:text-white border border-[#1c1c24]'
+                }`}
               >
-                <RobotAvatar
-                  size="md"
-                  autoEmotion={true}
-                />
+                📈 RL Reward Curve & Telemetry
               </button>
+              <button
+                onClick={() => setActiveTab('neural')}
+                className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'neural'
+                    ? 'bg-[#007aff] text-white shadow-lg shadow-blue-950/50'
+                    : 'bg-[#0c0c10] text-[#86868b] hover:text-white border border-[#1c1c24]'
+                }`}
+              >
+                🔮 3D Neural Link (12-Feature PPO)
+              </button>
+              <button
+                onClick={() => setActiveTab('journal')}
+                className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'journal'
+                    ? 'bg-[#007aff] text-white shadow-lg shadow-blue-950/50'
+                    : 'bg-[#0c0c10] text-[#86868b] hover:text-white border border-[#1c1c24]'
+                }`}
+              >
+                📋 Live Execution Journal
+              </button>
+              <button
+                onClick={() => setActiveTab('montecarlo')}
+                className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'montecarlo'
+                    ? 'bg-[#007aff] text-white shadow-lg shadow-blue-950/50'
+                    : 'bg-[#0c0c10] text-[#86868b] hover:text-white border border-[#1c1c24]'
+                }`}
+              >
+                🛡️ Monte Carlo Stress Test
+              </button>
+            </div>
+
+            {/* Quick Epoch Tracker */}
+            <div className="hidden sm:flex items-center gap-3 text-xs font-mono text-[#86868b]">
+              <span>Epoch: <strong className="text-white">{telemetry.epoch}</strong>/{episodes}</span>
+              <span>Actor Loss: <strong className="text-[#007aff]">{telemetry.actorLoss.toFixed(4)}</strong></span>
+            </div>
+          </div>
+
+          {/* Active Tab Viewport Content */}
+          <div className="flex-1 min-h-[360px]">
+            {activeTab === 'chart' && (
+              <WalkForwardChart
+                trainHistory={trainHistory}
+                valHistory={valHistory}
+                maHistory={maHistory}
+                latestReward={telemetry.trainReward}
+                latestValReward={telemetry.valReward}
+              />
             )}
-
-            {/*  macOS Theme Right Slide-Over AI Assistant Sidebar (Contained strictly above bottom drawer) */}
-            <MacOSAssistantSidebar
-              isOpen={isAssistantOpen}
-              onClose={() => setIsAssistantOpen(false)}
-              onOpenSettings={() => setIsAISettingsOpen(true)}
-            />
-          </main>
-        </div>
-
-        {/*  Bottom Persistent Analytics Drawer */}
-        <AnalyticsDrawer
-          logs={logs}
-          isRunning={rlStatus === 'running'}
-          rlStatus={rlStatus}
-          rlTelemetry={rlTelemetry}
-          latestStep={rlLatestStep}
-        />
+            {activeTab === 'neural' && (
+              <Neural3DLink
+                quantVector={quantVector}
+                actionProbs={telemetry.actionDist}
+                isTraining={isTraining}
+              />
+            )}
+            {activeTab === 'journal' && <TradesJournal trades={trades} />}
+            {activeTab === 'montecarlo' && <MonteCarloStressTest telemetry={telemetry} />}
+          </div>
+        </main>
       </div>
 
-      {/*  Main System Settings Modal (Account, Compute CPU/GPU, Auto-Retrain, Storage, Production) */}
-      <MainSettingsModal
-        isOpen={isMainSettingsOpen}
-        onClose={() => setIsMainSettingsOpen(false)}
+      {/* Bottom Live 12-Dimensional Tensor Bar */}
+      <LiveTensorBar quantVector={quantVector} />
+
+      {/* Modals */}
+      <CreatePresetModal
+        isOpen={isCreatePresetOpen}
+        onClose={() => setIsCreatePresetOpen(false)}
+        onSave={(newPreset) => {
+          setPresets((prev) => [newPreset, ...prev]);
+          handleSelectPreset(newPreset);
+        }}
       />
 
-      {/*  Dedicated AI Assistant API Settings Modal (Opened from Copilot Header Gear Icon) */}
-      <AISettingsModal
-        isOpen={isAISettingsOpen}
-        onClose={() => setIsAISettingsOpen(false)}
-      />
-
-      {/*  FxDreema-Style Load Project Manager Modal */}
-      <ProjectManagerModal
-        isOpen={isProjectManagerOpen}
-        onClose={() => setIsProjectManagerOpen(false)}
-        onNewProject={handleNewProject}
-        currentProjectName={currentProjectName}
-      />
-
-      {/*  MT5 One-Click Deploy Modal */}
-      <MT5DeployModal
-        isOpen={isMT5DeployOpen}
-        onClose={() => setIsMT5DeployOpen(false)}
-      />
-
-      {/*  In-App Alert Dialog */}
-      <ConfirmDialog
-        isOpen={Boolean(appAlert)}
-        type="warning"
-        title="Import Error"
-        message={appAlert || ''}
-        confirmText="OK"
-        onConfirm={() => setAppAlert(null)}
+      <EngineSettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        settings={settings}
+        onSaveSettings={setSettings}
       />
     </div>
   );
-}
-
-export function App() {
-  return (
-    <ThemeProvider>
-      <FlowProvider>
-        <AppContent />
-      </FlowProvider>
-    </ThemeProvider>
-  );
-}
-
-export default App;
-
+};
