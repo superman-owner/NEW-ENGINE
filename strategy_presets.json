@@ -1,0 +1,72 @@
+[
+  {
+    "id": "gold_institutional_ppo",
+    "name": "🥇 Gold Institutional PPO (XAUUSD)",
+    "symbol": "XAUUSD",
+    "timeframe": "M15",
+    "bars": "10,000",
+    "episodes": 300,
+    "model_type": "PPO Actor-Critic (12 Quant Features)",
+    "description": "High-Frequency Gold Scalper with GAE Advantage & Drawdown Guard"
+  },
+  {
+    "id": "bpnn_4layer_alpha",
+    "name": "🔮 1. BPNN 4-Layer Alpha Strategy (5➔6➔6➔3)",
+    "symbol": "XAUUSD",
+    "timeframe": "M15",
+    "bars": "10,000",
+    "episodes": 350,
+    "model_type": "Standalone BPNN (Rprop+)",
+    "description": "5-Pillar Features to 4-Layer Backpropagation Neural Network & MT5 Bot"
+  },
+  {
+    "id": "lightgbm_triple_barrier",
+    "name": "🧠 2. LightGBM + Triple Barrier Alpha",
+    "symbol": "BTCUSD",
+    "timeframe": "M15",
+    "bars": "20,000",
+    "episodes": 300,
+    "model_type": "LightGBM + Triple Barrier",
+    "description": "Triple-Barrier labeling with Purged Walk-Forward CV & LightGBM"
+  },
+  {
+    "id": "lstm_deep_sequence",
+    "name": "🌊 3. PyTorch Neural Sequence (LSTM Deep)",
+    "symbol": "ETHUSD",
+    "timeframe": "H1",
+    "bars": "20,000",
+    "episodes": 400,
+    "model_type": "PyTorch LSTM (60-bar Lookback)",
+    "description": "Multi-scale sequence modeling with Lookback Window of 60 bars"
+  },
+  {
+    "id": "fx_fast_scalper",
+    "name": "⚡ 4. FX Multi-Horizon PPO (EURUSD)",
+    "symbol": "EURUSD",
+    "timeframe": "M15",
+    "bars": "10,000",
+    "episodes": 250,
+    "model_type": "PPO Actor-Critic (12 Quant Features)",
+    "description": "Low-friction Forex Scalper optimized for London/NY overlaps"
+  },
+  {
+    "id": "crypto_momentum",
+    "name": "🚀 5. Crypto Momentum Trend (BTCUSD)",
+    "symbol": "BTCUSD",
+    "timeframe": "H1",
+    "bars": "20,000",
+    "episodes": 450,
+    "model_type": "PPO Actor-Critic (12 Quant Features)",
+    "description": "High-volatility momentum surfer with Volatility & EMA filtering"
+  },
+  {
+    "id": "volatility_orderflow_breaker",
+    "name": "💎 6. Volatility & Orderflow Breaker (US30)",
+    "symbol": "US30",
+    "timeframe": "M5",
+    "bars": "15,000",
+    "episodes": 350,
+    "model_type": "PPO Actor-Critic (12 Quant Features)",
+    "description": "Intraday US30 Dow Jones volatility expansion capture"
+  }
+]

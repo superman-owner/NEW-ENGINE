@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+:root {
+  --font-display: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #000000;
+  color: #ffffff;
+  font-family: var(--font-display);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #060608;
+}
+::-webkit-scrollbar-thumb {
+  background: #1c1c24;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2a2a36;
+}
+
+/* Glassmorphism & Specular Glows */
+.glass-panel {
+  background-color: #060608;
+  border: 1px solid #1c1c24;
+}
+
+.glass-card {
+  background-color: #0c0c10;
+  border: 1px solid #1c1c24;
+}
+
+.glass-elevated {
+  background-color: #121217;
+  border: 1px solid #22222d;
+}
+
+.text-gradient-cyan {
+  background: linear-gradient(135deg, #00c7be 0%, #007aff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-gradient-gold {
+  background: linear-gradient(135deg, #ffd60a 0%, #ff9f0a 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
