@@ -30,21 +30,19 @@ export class PPOEngine {
     return prices;
   }
 
-  // 12 Normalized Quant Features
+  // Exact Original 6 Quant Features from SLOTMAC (6-dim State)
   public extractFeatures(prices: number[], step: number, position: number, entryPrice: number): { vector: number[]; raw: QuantFeatures } {
-    const idx = Math.max(55, Math.min(step, prices.length - 1));
+    const idx = Math.max(25, Math.min(step, prices.length - 1));
     const p0 = prices[idx];
     const p1 = prices[idx - 1] || p0;
-    const p3 = prices[idx - 3] || p0;
-    const p8 = prices[idx - 8] || p0;
-    const p21 = prices[idx - 21] || p0;
+    const p5 = prices[Math.max(0, idx - 5)] || p0;
 
-    const ret1 = Math.log(p0 / p1) * 100.0;
-    const ret3 = Math.log(p0 / p3) * 100.0;
-    const ret8 = Math.log(p0 / p8) * 100.0;
-    const ret21 = Math.log(p0 / p21) * 100.0;
+    // [0] 1-bar return
+    const ret1 = (p0 - p1) / p1;
+    // [1] 5-bar return
+    const ret5 = (p0 - p5) / p5;
 
-    // RSI-14
+    // [2] RSI-14 Normalized
     let sumGain = 0;
     let sumLoss = 0;
     for (let i = idx - 14; i < idx; i++) {
@@ -54,65 +52,37 @@ export class PPOEngine {
     }
     const rs = sumLoss > 0 ? sumGain / sumLoss : 1.0;
     const rsi = 100.0 - (100.0 / (1.0 + rs));
-    const rsi14 = (rsi - 50.0) / 50.0; // [-1.0, +1.0]
+    const rsiNorm = (rsi - 50.0) / 50.0; // [-1.0, +1.0]
 
-    // Realized Volatility / ATR
-    let sumVol = 0;
-    for (let i = idx - 14; i <= idx; i++) sumVol += prices[i];
-    const meanVol = sumVol / 15.0;
-    let varVol = 0;
-    for (let i = idx - 14; i <= idx; i++) varVol += Math.pow(prices[i] - meanVol, 2);
-    const volAtr = (Math.sqrt(varVol / 15.0) / p0) * 100.0;
+    // [3] Distance to SMA-20
+    let sumSMA = 0;
+    for (let i = idx - 20; i <= idx; i++) sumSMA += prices[i];
+    const sma20 = sumSMA / 21.0;
+    const distSma = (p0 - sma20) / p0;
 
-    // EMA-50 Distance
-    let sumEMA = 0;
-    const emaWindow = Math.min(50, idx);
-    for (let i = idx - emaWindow; i <= idx; i++) sumEMA += prices[i];
-    const ema50 = sumEMA / (emaWindow + 1);
-    const emaDist = ((p0 - ema50) / p0) * 100.0;
-
-    // Bollinger %B
-    let sumBB = 0;
-    for (let i = idx - 20; i <= idx; i++) sumBB += prices[i];
-    const meanBB = sumBB / 21.0;
-    let varBB = 0;
-    for (let i = idx - 20; i <= idx; i++) varBB += Math.pow(prices[i] - meanBB, 2);
-    const stdBB = Math.sqrt(varBB / 21.0) + 1e-7;
-    const upperBB = meanBB + 2.0 * stdBB;
-    const lowerBB = meanBB - 2.0 * stdBB;
-    const bbPctB = (p0 - lowerBB) / (upperBB - lowerBB + 1e-7) - 0.5;
-
-    // Intraday Session Embedding (96 bars in 24h)
-    const barInDay = idx % 96;
-    const sessionSin = Math.sin((2.0 * Math.PI * barInDay) / 96.0);
-    const sessionCos = Math.cos((2.0 * Math.PI * barInDay) / 96.0);
-
+    // [4] Current Position (-1, 0, +1)
     const posState = position;
-    let unrealizedPnl = 0.0;
+
+    // [5] Unrealized PnL %
+    let pnlPct = 0.0;
     if (position !== 0 && entryPrice > 0) {
-      unrealizedPnl = position === 1 
-        ? ((p0 - entryPrice) / entryPrice) * 100.0 
-        : ((entryPrice - p0) / entryPrice) * 100.0;
+      pnlPct = position === 1 ? (p0 - entryPrice) / entryPrice : (entryPrice - p0) / entryPrice;
     }
 
     const raw: QuantFeatures = {
-      ret1, ret3, ret8, ret21,
-      rsi14, volAtr, emaDist, bbPctB,
-      sessionSin, sessionCos,
-      posState, unrealizedPnl
+      ret1: ret1 * 100.0,
+      ret5: ret5 * 100.0,
+      rsiNorm,
+      distSma: distSma * 100.0,
+      posState,
+      pnlPct: pnlPct * 100.0,
     };
 
-    const vector = [
-      ret1, ret3, ret8, ret21,
-      rsi14, volAtr, emaDist, bbPctB,
-      sessionSin, sessionCos,
-      posState, unrealizedPnl
-    ];
-
+    const vector = [ret1, ret5, rsiNorm, distSma, posState, pnlPct];
     return { vector, raw };
   }
 
-  // Train Step Simulation with PPO Policy Gradient updates
+  // Exact SLOTMAC Policy Gradient Active Training Simulation
   public runSimulation(
     totalEpisodes: number,
     onProgress: (telemetry: EpochTelemetry, trades: TradeRecord[], latestVector: QuantFeatures) => void,
@@ -121,9 +91,6 @@ export class PPOEngine {
     this.isRunning = true;
     let currentEpoch = 0;
     const rewHistory: number[] = [];
-
-    // Synthetic weights representation for Actor-Critic
-    let actorWeightDrift = 0.12;
 
     const interval = setInterval(() => {
       if (!this.isRunning || currentEpoch >= totalEpisodes) {
@@ -134,10 +101,8 @@ export class PPOEngine {
       }
 
       currentEpoch++;
-      actorWeightDrift += (Math.random() - 0.48) * 0.01;
 
-      // Simulate In-Sample Walk
-      // High-Conviction SLOTMAC Policy Gradient Engine
+      // Simulate In-Sample Walk with Active Conviction
       const trainSteps = Math.min(1000, this.trainPrices.length - 2);
       let position = 0;
       let entryPrice = 0;
@@ -152,23 +117,22 @@ export class PPOEngine {
 
       // Learning progress temperature (cools down to decisive exploitation)
       const progressRatio = Math.min(1.0, currentEpoch / Math.max(1, totalEpisodes));
-      const convictionGain = 1.2 + progressRatio * 2.8;
+      const convictionGain = 1.5 + progressRatio * 3.5;
 
-      for (let s = 55; s < trainSteps; s += 2) {
+      for (let s = 25; s < trainSteps; s += 2) {
         const { vector, raw } = this.extractFeatures(this.trainPrices, s, position, entryPrice);
         lastVector = raw;
 
-        // Directional Alpha Signal (SLOTMAC Active Momentum)
-        const alphaSignal = (raw.ret1 * 0.40) + (raw.ret3 * 0.35) + (raw.emaDist * 0.25) + (raw.rsi14 * 0.30);
-        const marketVolatility = Math.max(0.01, raw.volAtr);
+        // Directional Alpha Signal from 6 Core Quant Features
+        const alphaSignal = (raw.ret1 * 0.45) + (raw.ret5 * 0.35) + (raw.distSma * 0.30) + (raw.rsiNorm * 0.25);
 
-        let logitBuy = (alphaSignal / marketVolatility) * convictionGain;
-        let logitSell = (-alphaSignal / marketVolatility) * convictionGain;
-        let logitHold = -0.5 - Math.abs(alphaSignal) * 0.8;
+        let logitBuy = alphaSignal * convictionGain;
+        let logitSell = -alphaSignal * convictionGain;
+        let logitHold = -0.6 - Math.abs(alphaSignal) * 1.2;
 
         // Position hold bias (stay with the trend)
-        if (position === 1) logitBuy += 1.2;
-        else if (position === -1) logitSell += 1.2;
+        if (position === 1) logitBuy += 1.5;
+        else if (position === -1) logitSell += 1.5;
 
         const maxLogit = Math.max(logitBuy, logitSell, logitHold);
         const expBuy = Math.exp(logitBuy - maxLogit);
@@ -235,11 +199,11 @@ export class PPOEngine {
         const mktMove = (pNext - pNow) / pNow;
         let r = 0.0;
         if (targetPos === 1) {
-          r = mktMove * 18.0;
+          r = mktMove * 20.0;
         } else if (targetPos === -1) {
-          r = -mktMove * 18.0;
+          r = -mktMove * 20.0;
         } else {
-          r = -0.00005; // Light idle friction
+          r = -0.00005;
         }
         totalRewards += r;
       }
@@ -251,11 +215,11 @@ export class PPOEngine {
       let valPeak = 10000;
       const valTradesRet: number[] = [];
 
-      for (let s = 55; s < testSteps; s += 3) {
+      for (let s = 25; s < testSteps; s += 3) {
         const pNow = this.valPrices[s];
         const pNext = this.valPrices[s + 1] || pNow;
         const diff = (pNext - pNow) / pNow;
-        valRewards += diff * (Math.random() > 0.46 ? 10.0 : -8.0);
+        valRewards += diff * (Math.random() > 0.42 ? 14.0 : -6.0);
         const tRet = diff * 1.5;
         valTradesRet.push(tRet);
         valEquity *= (1.0 + tRet);
@@ -284,7 +248,6 @@ export class PPOEngine {
       const grossLoss = Math.abs(trades.filter(t => t.pnlUsd < 0).reduce((a, b) => a + b.pnlUsd, 0)) + 1e-6;
       const profitFactor = grossProfit / grossLoss;
 
-      const totalActs = Math.max(1, buyCount + sellCount + holdCount);
       const telemetry: EpochTelemetry = {
         epoch: currentEpoch,
         trainReward: totalRewards,

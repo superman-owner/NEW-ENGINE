@@ -157,17 +157,11 @@ const INITIAL_TELEMETRY: EpochTelemetry = {
 
 const INITIAL_QUANT: QuantFeatures = {
   ret1: 0.0,
-  ret3: 0.0,
-  ret8: 0.0,
-  ret21: 0.0,
-  rsi14: 0.0,
-  volAtr: 0.0,
-  emaDist: 0.0,
-  bbPctB: 0.0,
-  sessionSin: 0.0,
-  sessionCos: 1.0,
+  ret5: 0.0,
+  rsiNorm: 0.0,
+  distSma: 0.0,
   posState: 0.0,
-  unrealizedPnl: 0.0,
+  pnlPct: 0.0,
 };
 
 export const App: React.FC = () => {
@@ -339,7 +333,7 @@ export const App: React.FC = () => {
                     : 'bg-[#0c0c10] text-[#86868b] hover:text-white border border-[#1c1c24]'
                 }`}
               >
-                🔮 3D Neural Link (12-Feature PPO)
+                🔮 3D Neural Link (6-Feature Active RL Trader)
               </button>
               <button
                 onClick={() => setActiveTab('journal')}

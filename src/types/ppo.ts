@@ -1,16 +1,10 @@
 export interface QuantFeatures {
   ret1: number;
-  ret3: number;
-  ret8: number;
-  ret21: number;
-  rsi14: number;
-  volAtr: number;
-  emaDist: number;
-  bbPctB: number;
-  sessionSin: number;
-  sessionCos: number;
+  ret5: number;
+  rsiNorm: number;
+  distSma: number;
   posState: number;
-  unrealizedPnl: number;
+  pnlPct: number;
 }
 
 export interface TradeRecord {

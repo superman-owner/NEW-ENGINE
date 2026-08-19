@@ -26,14 +26,14 @@ export const Neural3DLink: React.FC<Neural3DLinkProps> = ({
     let animId: number;
 
     const nodes = [
-      // 12 Inputs
-      ...Array.from({ length: 12 }).map((_, i) => ({
+      // 6 Core Inputs (SLOTMAC Architecture)
+      ...Array.from({ length: 6 }).map((_, i) => ({
         layer: 0,
         idx: i,
         x: -260,
-        y: 165 - i * 30,
-        z: Math.sin((i / 12) * Math.PI) * 20,
-        label: ['Ret1', 'Ret3', 'Ret8', 'Ret21', 'RSI', 'VolATR', 'EMA50', 'BB%B', 'SinT', 'CosT', 'Pos', 'PnL'][i],
+        y: 110 - i * 44,
+        z: Math.sin((i / 6) * Math.PI) * 20,
+        label: ['Ret1', 'Ret5', 'RSI', 'DistSMA', 'Position', 'PnL'][i],
         color: '#00c7be',
       })),
       // 8 Hidden 1
@@ -193,7 +193,7 @@ export const Neural3DLink: React.FC<Neural3DLinkProps> = ({
       <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
         <span className="w-2.5 h-2.5 rounded-full bg-[#007aff]" />
         <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-          3D Neural Link (12-Feature PPO Actor-Critic)
+          3D Neural Link (6-Feature Active RL Trader)
         </h3>
       </div>
 
