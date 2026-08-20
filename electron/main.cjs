@@ -15,7 +15,7 @@ function createWindow() {
     backgroundColor: '#040407',
     title: 'FXForge Lab - AI Deep RL BPNN Quant Studio',
     autoHideMenuBar: true,
-    show: false,
+    show: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
@@ -24,21 +24,24 @@ function createWindow() {
     },
   });
 
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
-  });
-
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: 'deny' };
   });
 
-  const isDev = !app.isPackaged || process.env.NODE_ENV === 'development';
+  const devServerUrl = process.env.VITE_DEV_SERVER_URL;
+  const distPath = path.join(__dirname, '../dist/index.html');
 
-  if (isDev && process.env.VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
+  if (devServerUrl) {
+    mainWindow.loadURL(devServerUrl).catch(() => {
+      if (fs.existsSync(distPath)) {
+        mainWindow.loadFile(distPath);
+      }
+    });
+  } else if (fs.existsSync(distPath)) {
+    mainWindow.loadFile(distPath);
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+    mainWindow.loadURL('http://127.0.0.1:5174');
   }
 
   mainWindow.on('closed', () => {
